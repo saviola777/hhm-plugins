@@ -1,6 +1,8 @@
 /**
  * Helper script for player information and management.
  *
+ * TODO merge into players plugin?
+ *
  * Changelog:
  *
  * 1.0.0:

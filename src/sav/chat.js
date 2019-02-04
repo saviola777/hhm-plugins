@@ -39,9 +39,6 @@ room.pluginSpec = {
     'onPlayerChat': {
       'after': [`sav/commands`],
     },
-    'onPlayerJoin': {
-      'after': [`sav/players`],
-    }
   },
   config: {
     commandShortcuts: true,
@@ -158,7 +155,7 @@ function leaveChannel(playerId, channel) {
     return false;
   }
 
-  channels[channel].delete(playerId);
+  channels[channel].players.delete(playerId);
 
   room.sendChat(`Left channel &${channel}`, playerId);
 
@@ -231,13 +228,13 @@ function sendChat({ callingPluginName }, message, playerId, prefix = []) {
  *
  * @param message Message to be sent
  * @param playerId Receiver of the message or undefined if public message
- * @param prefixWithTime Single prefix or array of prefixes
+ * @param prefix Single prefix or array of prefixes
  *
  * TODO extend for private messages
  */
 function sendChatRaw(message, playerId, prefix = []) {
   let prefixWithTime;
-  if (typeof prefixWithTime[Symbol.iterator] !== `function`) {
+  if (typeof prefix[Symbol.iterator] !== `function`) {
     prefixWithTime = [prefix];
   } else {
     prefixWithTime = prefix.slice();
@@ -378,7 +375,7 @@ function onCommandChatChannelSwitch(playerId, [channel]) {
  * TODO documentation
  * TODO handle players already in the room
  */
-function onLoadHandler() {
+function onRoomLinkHandler() {
 
   sendChatNative = room.sendChat;
   getChatInfo = room.getPlugin(`sav/players`)
@@ -412,6 +409,7 @@ function onPlayerChatHandler(player, message) {
  * TODO documentation
  */
 function onPlayerJoinHandler(player) {
+
   const chatInfo = getChatInfo(player.id);
 
   if (chatInfo.channels === undefined) {
@@ -442,7 +440,7 @@ room.isPlayerInChannel = isPlayerInChannel;
 room.joinChannel = joinChannel;
 room.leaveChannel = leaveChannel;
 
-room.onLoad = onLoadHandler;
+room.onRoomLink = onRoomLinkHandler;
 room.onPlayerChat = onPlayerChatHandler;
 room.onPlayerJoin = onPlayerJoinHandler;
 room.onPlayerTeamChange = onPlayerTeamChangeHandler;

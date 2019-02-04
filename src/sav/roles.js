@@ -233,7 +233,7 @@ function onCommandAuthHandler(playerId, arguments, argumentString, message) {
 /**
  * TODO documentation
  */
-function onLoadHandler() {
+function onRoomLinkHandler() {
   room.getPlugin(`sav/help`).registerHelp(`auth`, ` ROLE PASSWORD`);
 }
 
@@ -283,7 +283,7 @@ room.removePlayerRole = removePlayerRole;
 room.removeRole = removeRole;
 room.setPlayerRole = setPlayerRole;
 
-room.onLoad = onLoadHandler;
+room.onRoomLink = onRoomLinkHandler;
 room.onPlayerRole_admin = onPlayerRoleAdminHandler;
 room.onPlayerAdminChange = onPlayerAdminChangeHandler;
 room.onCommand_auth = onCommandAuthHandler;

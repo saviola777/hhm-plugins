@@ -97,7 +97,7 @@ async function onCommandPluginLoadHandler(playerId, arguments) {
 /**
  * TODO documentation
  */
-function onLoadHandler() {
+function onRoomLinkHandler() {
   roles = room.getPlugin(`sav/roles`);
 
   if (!roles.hasRole(`host`)) {
@@ -115,4 +115,4 @@ function onLoadHandler() {
 //
 
 room.onCommand_plugin_load = onCommandPluginLoadHandler;
-room.onLoad = onLoadHandler;
+room.onRoomLink = onRoomLinkHandler;

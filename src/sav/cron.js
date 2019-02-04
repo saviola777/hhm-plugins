@@ -49,6 +49,7 @@
  *  - new jobs are picked up via polling
  *
  *  TODO keep track of and remove unused intervals
+ *  TODO add support for removing cronjobs
  */
 
 const room = HBInit();
@@ -215,9 +216,9 @@ function onGameTickHandler() {
  * Pick up initial cron jobs and register as room manager observer to pick up
  * future cron jobs immediately.
  */
-function onLoadHandler() {
-  room.getPluginManager().getRoomManager().registerObserver(
-      { update: () => setupCronJobs() });
+function onRoomLinkHandler() {
+  room.getPluginManager().registerEventHandler(
+      () => setupCronJobs(), [HHM.events.PROPERTY_SET]);
   setupCronJobs();
 }
 
@@ -226,4 +227,4 @@ function onLoadHandler() {
 //
 
 room.onGameTick = onGameTickHandler;
-room.onLoad = onLoadHandler;
+room.onRoomLink = onRoomLinkHandler;
