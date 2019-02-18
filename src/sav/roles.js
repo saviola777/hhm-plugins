@@ -166,8 +166,8 @@ function provideAuthenticationInfo(playerId) {
 function removePlayerRole(playerId, role) {
   provideAuthenticationInfo(playerId);
 
-  const returnValue = getPlayerAuth(playerId).delete(role);
-  getUserAuth(playerId).delete(role);
+  const returnValue = getPlayerAuth(playerId).roles.delete(role);
+  getUserAuth(playerId).roles.delete(role);
 
   if (returnValue) {
     triggerAuthenticationEvents(playerId, role, false);
