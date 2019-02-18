@@ -7,8 +7,8 @@
  */
 
 room.pluginSpec = {
-  name: `author/plugin-name`, // author here is optional and can be a shorthand,
-  author: `author`,           // it is primarily used to avoid name clashes.
+  name: `aut/plugin-name`,  // aut here is optional and can be a shorthand,
+  author: `author`,         // it is primarily used to avoid name clashes.
   version: `1.0.0`,
   dependencies: [
     `author/other-plugin`,
@@ -38,7 +38,7 @@ room.pluginSpec = {
 const config = plugin.pluginSpec.config;
 const SOME_CONSTANT = `value you don't want to repeat everywhere`;
 
-let variableInitializedInOnLoad;
+let variableInitializedInOnRoomLinkHandler;
 
 //
 // Plugin functions
@@ -70,8 +70,8 @@ function f1() {
 /**
  * Event handler function can be defined here and assigned to the room later.
  */
-function onLoadHandler() {
-  variableInitializedInOnLoad = `...`;
+function onRoomLinkHandler() {
+  variableInitializedInOnRoomLinkHandler = `...`;
 }
 
 //
@@ -85,4 +85,4 @@ function onLoadHandler() {
 
 room.f1 = f1;
 
-room.onLoad = onLoadHandler;
+room.onRoomLink = onRoomLinkHandler;

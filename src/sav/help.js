@@ -8,19 +8,37 @@
  *  start with 'Usage: !cmd subcmd', after that the given help text will be
  *  inserted.
  *
- *  Example:
+ * Example:
  *
- *  room.getPlugin(`sav/help`).registerHelp(`auth`, ` ROLE PASSWORD.`);
+ * room.getPlugin(`sav/help`).registerHelp(`auth`, ` ROLE PASSWORD.`);
  *
- *  Which will result in the output `Usage: !auth ROLE PASSWORD.` when typing
- *  `!help auth`.
+ * Which will result in the output `Usage: !auth ROLE PASSWORD.` when typing
+ * `!help auth`.
+ *
+ * To display help programmatically, you can use
+ *
+ * room.getPlugin(`sav/help`).displayHelp(playerId, `auth`);
+ *
+ * for this example.
+ *
+ * Changelog:
+ *
+ * 1.0.1:
+ *  - add programmatic way to display help texts using displayHelp().
+ *
+ * 1.0.0:
+ *  - initial version
+ *
+ *
+ *  TODO Display help when calling command without parameters
+ *  TODO Display sub-commands when calling help for main command without help
  */
 const room = HBInit();
 
 room.pluginSpec = {
   name: `sav/help`,
   author: `saviola`,
-  version: `1.0.0`,
+  version: `1.0.1`,
   dependencies: [
     `sav/commands`
   ],
@@ -38,6 +56,18 @@ function createCommandList() {
       .filter(h => h.startsWith(`onCommand`))
       .map(h => h.split(`_`)[1] || ``)
       .filter(h => h.length > 0))];
+}
+
+/**
+ * Programmatically display help for the given command and to the given player.
+ */
+function displayHelp(playerId, command) {
+  command = prepareCommand(command);
+  const handlerName = `onCommand_help_${command}`;
+
+  if (room[handlerName] !== undefined) {
+    room[handlerName](playerId);
+  }
 }
 
 /**
@@ -72,18 +102,25 @@ function getPluginNamesForCommand(commandParts) {
       .map(id => manager.getPluginName(id));
 }
 
+function prepareCommand(command) {
+  if (command.includes(` `)) {
+    command = command.split(` `).join(`_`);
+  }
+
+  return command;
+}
 
 /**
  * Helper function to register a help text for the given command.
  */
 function registerHelp(command, helpText) {
-  if (command.includes(` `)) {
-    command = command.split(` `).join(`_`);
-  }
+  command = prepareCommand(command);
 
   helpText = `Usage: ${getCommandPrefix()}${command.split(`_`).join(` `)}${helpText}`;
 
   room[`onCommand_help_${command}`] = (playerId) => room.sendChat(helpText, playerId);
+
+  return room;
 }
 
 //
@@ -127,6 +164,7 @@ function onCommandHelpHandler(playerId, arguments) {
 // Exports
 //
 
+room.displayHelp = displayHelp;
 room.registerHelp = registerHelp;
 
 room.onCommand0_help = onCommandHelp0Handler;

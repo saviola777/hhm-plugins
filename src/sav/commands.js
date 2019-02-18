@@ -39,15 +39,22 @@
  *
  * Configuration:
  *
- * - commandPrefix: Any line that starts with this is interpreted as a command.
+ *  - commandPrefix: Any line that starts with this is interpreted as a command.
  *    Defaults to `!`. Lines that only contain this command prefix are ignored.
- * - multiCommandPrefixHidesMessage: If set to true, lines that start with two
- *   or more command prefixes (i.e. `!!`) are never displayed to the room, but
- *   are otherwise treated like normal commands
+ *  - hideCommands: How commands should be displayed in the room. 0 = don't hide
+ *    commands by default, only hide if the handler returns false; 1 = hide
+ *    commands from others, but display them to the player who issued it; 2 =
+ *    hide commands from all by default.
+ *  - multiCommandPrefixHidesMessage: If set to true, lines that start with two
+ *    or more command prefixes (i.e. `!!`) are never displayed to the room, but
+ *    are otherwise treated like normal commands
  *
  * TODO add onCommand catch-all support
  *
  * Changelog:
+ *
+ * 1.4.0:
+ *  - add config option to control how commands are displayed
  *
  * 1.3.0:
  *  - player ID instead of player object is passed to command handlers
@@ -70,9 +77,10 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/commands`,
   author: `saviola`,
-  version: `1.3.0`,
+  version: `1.4.0`,
   config: {
     commandPrefix: `!`,
+    hideCommands: 1,
     multiCommandPrefixHidesMessage: true,
   },
 };
@@ -199,26 +207,30 @@ function parseMessage(message, numArgsMax, commandPrefix, separator) {
  * Triggers command events if a command was found in the incoming message.
  *
  * TODO needs buffering or similar to avoid displaying command after the fact
+ * TODO detect commands that are not handled by any plugin?
  */
-function onPlayerChatHandler(player, message) {
+function onPlayerChatHandler(player, message, { returnValue }) {
+  if (returnValue === false) return false;
+
   message = room.getPluginConfig().commandPrefix !== ` `
       ? message.trimStart() : message;
 
   const parsedMessage = room.parseMessage(message);
 
   if (parsedMessage.command !== ``) {
-    let hideMessage = room.getPluginConfig().multiCommandPrefixHidesMessage
+    const hideMessage = room.getPluginConfig().multiCommandPrefixHidesMessage
         && (message.length !== removeMultiCommandPrefix(message,
             room.getPluginConfig().commandPrefix).length);
+    const hideCommands = room.getPluginConfig().hideCommands;
 
     // Display message, but to player only
-    if (!hideMessage) {
+    if (!hideMessage && hideCommands === 1) {
       room.sendChat(message, player.id, [`CMD`]);
     }
 
-    triggerEvents(player.id, parsedMessage);
+    const eventReturnValue = triggerEvents(player.id, parsedMessage);
 
-    return false;
+    return !hideMessage && hideCommands === 0 && eventReturnValue;
   }
 
   return true;

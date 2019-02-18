@@ -13,6 +13,11 @@
  *
  * Changelog:
  *
+ * 0.9.1:
+ *  - disable channels by default
+ *  - add lots of config parameters for better control
+ *  - moved sendChatMaxLength to the chat plugin
+ *
  * 0.9.0:
  *  - support for auto channels (global and team-based)
  *  - support for channel switching
@@ -23,6 +28,14 @@
  *
  * TODO add logging function for channels?
  * TODO add config documentation
+ *
+ * sendChatMaxLength:
+ *
+ * Overlong messages are automatically split in the HHM sendChat
+ * implementation. To avoid (accidental) chat flooding, no message can be
+ * longer than this value.
+ *
+ * By default this limits the output to 20 lines.
  */
 
 const room = HBInit();
@@ -30,9 +43,9 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/chat`,
   author: `saviola`,
-  version: `0.9.0`,
+  version: `0.9.1`,
   dependencies: [
-    `sav/core`,
+    `sav/commands`,
     `sav/players`
   ],
   order: {
@@ -42,7 +55,12 @@ room.pluginSpec = {
   },
   config: {
     commandShortcuts: true,
-    enableChannels: true,
+    enableChannels: false,
+    hhmPrefix: false,
+    sendChatMaxLength: 2686,
+    pluginPrefix: false,
+    pmPrefix: true,
+    timestampPrefix: true,
     prefixStart: ``,
     prefixEnd: ` ::`,
     prefixElementStart: ``,
@@ -61,7 +79,7 @@ const config = room.getPluginConfig();
 const teamChannelNames = [`spec`, `red`, `blue`];
 const reservedChannelNames = { GLOBAL: `global` };
 
-// Initialized in onLoad
+// Initialized in onRoomLinkHandler
 let sendChatNative, getChatInfo;
 
 //
@@ -148,8 +166,6 @@ function joinChannel(playerId, channel, password = ``) {
  * TODO documentation
  */
 function leaveChannel(playerId, channel) {
-  const chatInfo = getChatInfo(playerId);
-
   if (!channels.hasOwnProperty(channel)
       || !channels[channel].players.has(playerId)) {
     return false;
@@ -186,6 +202,8 @@ function sendPlayer(playerId, message) {
  */
 function sendChannel(channel, message, prefix = [`HHM`]) {
 
+  prefix = wrapInArrayOrCopy(prefix);
+
   if (config.enableChannels && channel !== reservedChannelNames.GLOBAL) {
     prefix.unshift(`&${channel}`);
   }
@@ -206,19 +224,19 @@ function sendChannel(channel, message, prefix = [`HHM`]) {
  * TODO non-private messages sent with this message go to the global channel?
  */
 function sendChat({ callingPluginName }, message, playerId, prefix = []) {
-  if (typeof prefix[Symbol.iterator] !== `function`) {
-    prefix = [prefix];
-  }
+  prefix = wrapInArrayOrCopy(prefix);
 
-  if (prefix.length === 0) {
+  if (prefix.length === 0 && config.hhmPrefix) {
     prefix.unshift(`HHM`);
   }
 
-  if (playerId !== undefined) {
+  if (playerId !== undefined && config.pmPrefix) {
     prefix.unshift(`PM`);
   }
 
-  prefix.unshift(callingPluginName);
+  if (config.pluginPrefix) {
+    prefix.unshift(callingPluginName);
+  }
 
   sendChatRaw(message, playerId, prefix);
 }
@@ -234,14 +252,15 @@ function sendChat({ callingPluginName }, message, playerId, prefix = []) {
  */
 function sendChatRaw(message, playerId, prefix = []) {
   let prefixWithTime;
-  if (typeof prefix[Symbol.iterator] !== `function`) {
-    prefixWithTime = [prefix];
-  } else {
-    prefixWithTime = prefix.slice();
-  }
 
-  const date = new Date();
-  prefixWithTime.unshift(`${padToTwo(date.getHours())}:${padToTwo(date.getMinutes())}:${padToTwo(date.getSeconds())}`);
+  prefixWithTime = wrapInArrayOrCopy(prefix);
+
+  if (config.enableChannels && config.timestampPrefix) {
+    const date = new Date();
+    prefixWithTime.unshift(
+        `${padToTwo(date.getHours())}:${padToTwo(date.getMinutes())}:${padToTwo(
+            date.getSeconds())}`);
+  }
 
   let p = ``;
 
@@ -270,13 +289,13 @@ function sendChatRaw(message, playerId, prefix = []) {
   let index = baseIndex;
   let i = 1;
 
-  while (i * 140 < HHM.config.sendChatMaxLength) {
+  while (i * 140 < config.sendChatMaxLength) {
     // TODO use message length for efficiency?
     if (message[index + baseIndex + 3] === undefined) {
-      return this.sendChatNative(`${p}...${message.substr(index)}`);
+      return sendChatNative(`${p}...${message.substr(index)}`, playerId);
     }
 
-    this.sendChatNative(`${p}...${message.substr(index, baseIndex)}...`);
+    sendChatNative(`${p}...${message.substr(index, baseIndex)}...`, playerId);
     index += baseIndex;
     i++;
   }
@@ -312,6 +331,14 @@ function updateCurrentChannel(playerId, channel) {
   }
 
   return false;
+}
+
+/**
+ * Wraps the given variable in an array or copies it if it is already an array.
+ */
+function wrapInArrayOrCopy(variable) {
+  return typeof variable !== `object` || variable.constructor !== Array
+      ? [variable] : variable.slice();
 }
 
 //
@@ -373,34 +400,40 @@ function onCommandChatChannelSwitch(playerId, [channel]) {
 
 /**
  * TODO documentation
- * TODO handle players already in the room
  */
 function onRoomLinkHandler() {
-
   sendChatNative = room.sendChat;
-  getChatInfo = room.getPlugin(`sav/players`)
-    .buildNamespaceGetter(`sav/chat`);
+  getChatInfo = room.getPlugin(`sav/players`).buildPlayerNamespaceGetter(`sav/chat`);
   room.extend(`sendChat`, sendChat);
 
-  initializeAutoChannels();
+  if (config.enableChannels) {
+    room.onPlayerJoin = onPlayerJoinHandler;
+    room.onPlayerTeamChange = onPlayerTeamChangeHandler;
 
-  // Handle host user
-  // TODO solve cleaner
-  getChatInfo(0).channels = createChannelsObject();
+    room.onCommand_chat_channel_create = onCommandChatChannelCreate;
+    room.onCommand_chat_channel_switch = onCommandChatChannelSwitch;
 
-  // Register shortcut commands
-  if (config.commandShortcuts) {
-    room.onCommand_ccs = onCommandChatChannelSwitch;
-    room.onCommand_ccc = onCommandChatChannelCreate;
+    // Register shortcut commands
+    if (config.commandShortcuts) {
+      room.onCommand_ccs = onCommandChatChannelSwitch;
+      room.onCommand_ccc = onCommandChatChannelCreate;
+    }
+
+    initializeAutoChannels();
+
+    // Handle host user
+    // TODO solve cleaner
+    getChatInfo(0).channels = createChannelsObject();
   }
 }
 
 /**
  * TODO documentation
  */
-function onPlayerChatHandler(player, message) {
+function onPlayerChatHandler(player, message, { returnValue }) {
+  if (!config.enableChannels) return returnValue;
 
-  sendPlayer(player.id, message);
+  if (returnValue !== false) sendPlayer(player.id, message);
 
   return false;
 }
@@ -442,8 +475,6 @@ room.leaveChannel = leaveChannel;
 
 room.onRoomLink = onRoomLinkHandler;
 room.onPlayerChat = onPlayerChatHandler;
-room.onPlayerJoin = onPlayerJoinHandler;
-room.onPlayerTeamChange = onPlayerTeamChangeHandler;
 
 // Chat commands
 // !c[hat] c[channel] s[witch] [<channel>] (!ccs)
@@ -452,6 +483,3 @@ room.onPlayerTeamChange = onPlayerTeamChangeHandler;
 // !c[hat] c[hannel] l[eave] <channel> [<password>] (!ccl)
 // !c[hat] c[hannel] w[rite] <channel> <message> (!ccw)
 // !c[hat] pm #<id> [<message>] (!cpm)
-
-room.onCommand_chat_channel_create = onCommandChatChannelCreate;
-room.onCommand_chat_channel_switch = onCommandChatChannelSwitch;

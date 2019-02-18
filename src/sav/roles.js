@@ -25,6 +25,11 @@
  *
  * Changelog:
  *
+ * 1.1.0:
+ *  - authentication information are no longer deleted when a player leaves
+ *  - explicitly assigned roles can now be made persistent, so a player can
+ *    rejoin later and will have the same roles as before
+ *
  * 1.0.0:
  *  - initial implementation of a basic role system
  */
@@ -34,13 +39,17 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/roles`,
   author: `saviola`,
-  version: `1.0.0`,
+  version: `1.1.0`,
   dependencies: [
-    `sav/core`,
+    `sav/commands`,
+    `sav/help`,
+    `sav/players`
   ],
   config: {
     roles: {},
     defaultRole: undefined,
+    persistentRoles: true, // TODO document
+    printAuthEventsToRoom: false, // TODO document
   },
 };
 
@@ -51,7 +60,7 @@ room.pluginSpec = {
 /**
  * TODO documentation
  */
-const authenticationInfo = new Map();
+let getPlayerAuth, getUserAuth;
 
 //
 // Plugin functions
@@ -72,13 +81,20 @@ function addOrUpdateRole(role, password) {
 /**
  * Add the given role to the given player.
  */
-function addPlayerRole(playerId, role) {
+function addPlayerRole(playerId, role, persistent = false) {
   provideAuthenticationInfo(playerId);
 
-  const returnValue = !authenticationInfo.get(playerId).has(role);
+  const playerRoles = getPlayerAuth(playerId).roles,
+      userRoles = getUserAuth(playerId).roles;
+
+  const returnValue = !playerRoles.has(role);
+
+  if (persistent && !userRoles.has(role)) {
+    userRoles.add(role);
+  }
 
   if (returnValue) {
-    authenticationInfo.get(playerId).add(role);
+    playerRoles.add(role);
     triggerAuthenticationEvents(playerId, role);
   }
 
@@ -98,10 +114,10 @@ function ensurePlayerRole(playerId, role, plugin, feature, message) {
   }
 
   const pluginFeature = feature === undefined ? plugin._name
-      : `${feature} of plugin ${plugin.name}`;
+      : `${feature} of plugin ${plugin._name}`;
 
-  room.sendChat(
-      `${message} for ${pluginFeature}. Player ${player.name} does not have role ${role}`,
+  room.sendChat(`${message} for "${pluginFeature}". Player ` +
+      `${room.getPlayer(playerId).name} does not have role ${role}`,
       playerId, HHM.log.level.ERROR);
 
   return false;
@@ -113,7 +129,7 @@ function ensurePlayerRole(playerId, role, plugin, feature, message) {
 function getRoles(playerId) {
   provideAuthenticationInfo(playerId);
 
-  return [...authenticationInfo.get(playerId)];
+  return [...getPlayerAuth(playerId).roles];
 }
 
 /**
@@ -122,7 +138,7 @@ function getRoles(playerId) {
 function hasPlayerRole(playerId, role) {
   provideAuthenticationInfo(playerId);
 
-  return authenticationInfo.get(playerId).has(role);
+  return getPlayerAuth(playerId).has(role);
 }
 
 /**
@@ -136,9 +152,11 @@ function hasRole(role) {
  * TODO documentation
  */
 function provideAuthenticationInfo(playerId) {
-  if (!authenticationInfo.has(playerId)) {
-    authenticationInfo.set(playerId, new Set());
-  }
+  const playerAuth = getPlayerAuth(playerId);
+  const userAuth = getUserAuth(playerId);
+
+  playerAuth.roles = playerAuth.roles || new Set();
+  userAuth.roles = userAuth.roles || new Set();
 }
 
 /**
@@ -148,10 +166,11 @@ function provideAuthenticationInfo(playerId) {
 function removePlayerRole(playerId, role) {
   provideAuthenticationInfo(playerId);
 
-  const returnValue = authenticationInfo.get(playerId).delete(role);
+  const returnValue = getPlayerAuth(playerId).delete(role);
+  getUserAuth(playerId).delete(role);
 
   if (returnValue) {
-    triggerAuthenticationEvents(player, role, false);
+    triggerAuthenticationEvents(playerId, role, false);
   }
 
   return returnValue;
@@ -168,10 +187,8 @@ function removePlayerRole(playerId, role) {
 function removeRole(role) {
   const returnValue = delete room.getPluginConfig().roles[role];
 
-  authenticationInfo.forEach((playerId, roles) => {
-    if (roles.delete(role)) {
-      triggerAuthenticationEvents(playerId, role, false);
-    }
+  room.getPlayerList().map((p) => {
+    removePlayerRole(p.id, role);
   });
 
   return returnValue;
@@ -180,8 +197,8 @@ function removeRole(role) {
 /**
  * Convenience function for adding / removing a role based on a boolean state.
  */
-function setPlayerRole(playerId, role, state) {
-  state ? room.addPlayerRole(playerId, role)
+function setPlayerRole(playerId, role, state = true, persistent = false) {
+  state ? room.addPlayerRole(playerId, role, persistent)
       : room.removePlayerRole(playerId, role);
 }
 
@@ -214,6 +231,7 @@ function onCommandAuthHandler(playerId, arguments, argumentString, message) {
   const player = room.getPlayer(playerId);
 
   if (arguments.length < 2) {
+    room.getPlugin(`sav/help`).displayHelp(playerId, `auth`);
     return false;
   }
 
@@ -223,8 +241,18 @@ function onCommandAuthHandler(playerId, arguments, argumentString, message) {
 
   if (roles.hasOwnProperty(role) && roles[role] === password
       && roles[role] !== ``) {
-    room.addPlayerRole(playerId, role);
-    room.sendChat(`${player.name} authenticated for role ${role}`);
+    room.addPlayerRole(playerId, role, room.getPluginConfig().persistentRoles);
+    if (room.getPluginConfig().printAuthEventsToRoom) {
+      room.sendChat(`${player.name} authenticated for role ${role}`);
+    } else {
+      room.sendChat(`You authenticated for role ${role}`, playerId);
+    }
+  } else {
+    if (room.getPluginConfig().printAuthEventsToRoom) {
+      room.sendChat(`${player.name} failed to authenticate for role ${role}`);
+    } else {
+      room.sendChat(`Unknown role ${role} or wrong password`, playerId);
+    }
   }
 
   return false;
@@ -234,6 +262,11 @@ function onCommandAuthHandler(playerId, arguments, argumentString, message) {
  * TODO documentation
  */
 function onRoomLinkHandler() {
+  getPlayerAuth = room.getPlugin(`sav/players`)
+      .buildPlayerNamespaceGetter(`sav/roles`);
+  getUserAuth = room.getPlugin(`sav/players`)
+      .buildUserNamespaceGetter(`sav/roles`);
+
   room.getPlugin(`sav/help`).registerHelp(`auth`, ` ROLE PASSWORD`);
 }
 
@@ -248,18 +281,14 @@ function onPlayerAdminChangeHandler(player) {
  * TODO documentation
  */
 function onPlayerJoinHandler(player) {
+  provideAuthenticationInfo(player.id);
   if (typeof room.getPluginConfig().defaultRole !== `undefined`) {
     room.addPlayerRole(player.id, room.getPluginConfig().defaultRole);
   }
-}
 
-/**
- * Remove authentication info for players leaving.
- *
- * TODO support rejoin
- */
-function onPlayerLeaveHandler(player) {
-  return authenticationInfo.delete(player.id);
+  [...getUserAuth(player.id).roles].map((role) => {
+    addPlayerRole(player.id, role);
+  });
 }
 
 /**
@@ -284,8 +313,7 @@ room.removeRole = removeRole;
 room.setPlayerRole = setPlayerRole;
 
 room.onRoomLink = onRoomLinkHandler;
-room.onPlayerRole_admin = onPlayerRoleAdminHandler;
+room.onPlayerRole_admin = room.onPlayerRole_host = onPlayerRoleAdminHandler;
 room.onPlayerAdminChange = onPlayerAdminChangeHandler;
 room.onCommand_auth = onCommandAuthHandler;
 room.onPlayerJoin = onPlayerJoinHandler;
-room.onPlayerLeave = onPlayerLeaveHandler;

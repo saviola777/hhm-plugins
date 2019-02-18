@@ -73,16 +73,32 @@ const playersByConn = {};
  */
 const playersById = {};
 
+/**
+ * Initialized in onRoomLinkHandler.
+ */
+let getPlayerNative;
+
 //
 // Plugin functions
 //
 
 /**
- * Convenience function to  create namespace getter for the given namespace.
+ * Convenience function to create a player namespace getter for the given
+ * namespace.
  */
-function buildNamespaceGetter(namespace) {
+function buildPlayerNamespaceGetter(namespace) {
   return (playerId) => {
     return room.getPlayer(playerId, true).getNamespace(namespace);
+  };
+}
+
+/**
+ * Convenience function to create a user namespace getter for the given
+ * namespace.
+ */
+function buildUserNamespaceGetter(namespace) {
+  return (playerId) => {
+    return room.getPlayer(playerId, true).getUser().getNamespace(namespace);
   };
 }
 
@@ -233,39 +249,38 @@ function setPlayerTeam({ previousFunction }, playerId,
 // Event handlers
 //
 
-/**
- * TODO documentation
- */
 function onRoomLinkHandler() {
-  // Create authentication data entry for host
-  // TODO solve cleaner
-  // TODO handle players already in the room
-  hostPlayer = room.getPlayer(0);
-  playersById[0] = createInitialPlayerObject(hostPlayer);
-  usersByAuth[`HOST_AUTH`] = createInitialUserdataObject();
-  const ns = usersByAuth[`HOST_AUTH`].getNamespace();
-  ns.ids.add(0);
-  ns.conns.add(`HOST_CONN`);
-  ns.names.add(room.getPlayer(0).name); // TODO make dynamic
-  ns.seen = new Date();
-  ns.online = true;
-  playersByConn[`HOST_CONN`] = new Set().add(`HOST_AUTH`);
-  idToAuth[0] = `HOST_AUTH`;
-
+  getPlayerNative = room.getPlayer;
   room.extend(`getPlayer`, getPlayer);
   room.extend(`getPlayerList`, getPlayerList);
   room.extend(`kickPlayer`, kickPlayer);
+  room.extend(`setPlayerAdmin`, setPlayerAdmin);
   room.extend(`setPlayerTeam`, setPlayerTeam);
 
   room.addEventStateValidator(`onPlayerJoin`,
       onPlayerJoinEventStateValidator);
 
-  room.addPreEventHandlerHook(`onPlayerTeamChange`,
-      onPlayerTeamChangePreEventHandlerHook);
   room.addPreEventHandlerHook(`onPlayerAdminChange`,
       onPlayerAdminChangePreEventHandlerHook);
   room.addPreEventHandlerHook(`onPlayerJoin`,
       onPlayerJoinPreEventHandlerHook);
+  room.addPreEventHandlerHook(`onPlayerTeamChange`,
+      onPlayerTeamChangePreEventHandlerHook);
+
+  // Create authentication data entry for host
+  // TODO solve cleaner
+  // TODO handle players already in the room
+  const hostPlayer = getPlayerNative(0);
+  playersById[0] = createInitialPlayerObject(hostPlayer);
+  usersByAuth[`HOST_AUTH`] = createInitialUserdataObject();
+  const ns = usersByAuth[`HOST_AUTH`].getNamespace();
+  ns.ids.add(0);
+  ns.conns.add(`HOST_CONN`);
+  ns.names.add(hostPlayer.name); // TODO make dynamic
+  ns.seen = new Date();
+  ns.online = true;
+  playersByConn[`HOST_CONN`] = new Set().add(`HOST_AUTH`);
+  idToAuth[0] = `HOST_AUTH`;
 }
 
 /**
@@ -337,14 +352,15 @@ function onPlayerAdminChangePreEventHandlerHook({}, player) {
  * TODO documentation
  */
 function onPlayerTeamChangePreEventHandlerHook({}, player) {
-  usersByAuth[idToAuth[player.id]].team = player.team;
+  getPlayerById(player.id, {}).team = player.team;
 }
 
 //
 // Exports
 //
 
-room.buildNamespaceGetter = buildNamespaceGetter;
+room.buildPlayerNamespaceGetter = buildPlayerNamespaceGetter;
+room.buildUserNamespaceGetter = buildUserNamespaceGetter;
 
 room.onRoomLink = onRoomLinkHandler;
 room.onPlayerLeave = onPlayerLeaveHandler;

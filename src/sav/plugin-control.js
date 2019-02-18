@@ -9,6 +9,9 @@
  *
  * Changelog:
  *
+ * 1.0.1:
+ *  - add support for enabling and disabling plugins from within the room
+ *
  * 1.0.0:
  *  - initial implementation with support for loading plugins from configured
  *    repositories, from raw URL and from pastebin
@@ -19,9 +22,10 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/plugin-control`,
   author: `saviola`,
-  version: `1.0.0`,
+  version: `1.0.1`,
   dependencies: [
-    `sav/core`,
+    `sav/help`,
+    `sav/roles`,
   ],
 };
 
@@ -32,7 +36,7 @@ room.pluginSpec = {
 /**
  * TODO documentation
  */
-let roles;
+let roles, help;
 
 //
 // Plugin functions
@@ -62,8 +66,7 @@ async function onCommandPluginLoadHandler(playerId, arguments) {
   }
 
   if (arguments.length === 0) {
-    return room.sendChat(`Usage: !plugin load NAME URL, at least one of NAME `
-        + `or URL must be specified.`, playerId, HHM.log.level.ERROR);
+    return help.displayHelp(playerId, `plugin load`);
   }
 
   let pluginName, pluginUrl;
@@ -97,17 +100,79 @@ async function onCommandPluginLoadHandler(playerId, arguments) {
 /**
  * TODO documentation
  */
+function onCommandPluginDisableHandler(playerId, [pluginName]) {
+  if (!roles.ensurePlayerRole(playerId, `host`, room, `plugin disable`)) {
+    return;
+  }
+
+  if (pluginName === undefined) {
+    return help.displayHelp(playerId, `plugin disable`);
+  }
+
+  const manager = room.getPluginManager();
+
+  if (!room.hasPlugin(pluginName)) {
+    return room.sendChat(`Invalid plugin name ${pluginName}`, playerId,
+        HHM.log.level.ERROR);
+  }
+
+  if (!manager.disablePluginById(manager.getPluginId(pluginName))) {
+    // TODO more error information
+    return room.sendChat(`Could not disable plugin ${pluginName}`);
+  }
+
+  room.sendChat(`Plugin ${pluginName} disabled by player ` +
+      room.getPlayer(playerId).name);
+}
+
+/**
+ * TODO documentation
+ */
+function onCommandPluginEnableHandler(playerId, [pluginName]) {
+  if (!roles.ensurePlayerRole(playerId, `host`, room, `plugin enable`)) {
+    return;
+  }
+
+  if (pluginName === undefined) {
+    return help.displayHelp(playerId, `plugin enable`);
+  }
+
+  const manager = room.getPluginManager();
+
+  if (!room.hasPlugin(pluginName)) {
+    return room.sendChat(`Invalid plugin name ${pluginName}`, playerId,
+        HHM.log.level.ERROR);
+  }
+
+  if (!manager.enablePluginById(manager.getPluginId(pluginName))) {
+    // TODO more error information
+    return room.sendChat(`Could not enable plugin ${pluginName}`);
+  }
+
+  room.sendChat(`Plugin ${pluginName} enabled by player ` +
+      room.getPlayer(playerId).name);
+}
+
+/**
+ * TODO documentation
+ */
 function onRoomLinkHandler() {
   roles = room.getPlugin(`sav/roles`);
+  help = room.getPlugin(`sav/help`);
 
   if (!roles.hasRole(`host`)) {
     roles.addOrUpdateRole(`host`);
     room.onPlayerAdminChange = (player, byPlayer) => {
       if (typeof byPlayer !== `undefined` && byPlayer.id !== 0) return;
 
-      roles.setPlayerRole(player, `host`, player.admin);
+      roles.setPlayerRole(player.id, `host`, player.admin);
     }
   }
+
+  help.registerHelp(`plugin load`,
+      ` NAME URL, at least one of NAME or URL must be specified.`)
+      .registerHelp(`plugin disable`, ` NAME`)
+      .registerHelp(`plugin enable`, ` NAME`);
 }
 
 //
@@ -115,4 +180,6 @@ function onRoomLinkHandler() {
 //
 
 room.onCommand_plugin_load = onCommandPluginLoadHandler;
+room.onCommand_plugin_disable = onCommandPluginDisableHandler;
+room.onCommand_plugin_enable = onCommandPluginEnableHandler;
 room.onRoomLink = onRoomLinkHandler;

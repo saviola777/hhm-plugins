@@ -1,5 +1,22 @@
 /**
- * TODO documentation
+ * Registers some core event state handlers, pre-event handler hooks and
+ * extensions to the native room API.
+ *
+ *  - Game state: room.isGamePaused() and room.isGameStarted() provide access
+ *    to room states
+ *  - room.getRoomLink() provides access to the room link at all times
+ *  - native event state validators: validators for onGameStart, onGameStop,
+ *    onGamePause, and onGameUnpause
+ *
+ * Changelog:
+ *
+ * 1.1.0:
+ *  - improved book-keeping and event state validation for paused and
+ *    started/stopped game states
+ *
+ * 1.0.0:
+ *  - initial version
+ *
  */
 
 const room = HBInit();
@@ -7,32 +24,31 @@ const room = HBInit();
 room.pluginSpec = {
   name: `hhm/core`,
   author: `saviola`,
-  version: `1.0.0`,
+  version: `1.1.0`,
   dependencies: [
     `hhm/core` // Can't be disabled
   ],
 };
 
-room.properties = { paused: false };
+//
+// Global variables
+//
 
-room.onRoomLink = (roomLink) => {
-  room.properties.roomLink = roomLink;
-  HHM.deferreds.roomLink.resolve();
-  HHM.ui.displayRoomLinkInHhmContainer(roomLink);
-};
+room.properties = { paused: false, started: false };
 
-room.onLoad = () => {
-  if (HHM.ui.isRoomLinkAvailable()) {
-    room.onRoomLink(HHM.ui.getRoomLink());
-  }
+//
+// Event handlers
+//
 
-  room.extend(`isRoomStarted`, () => {
-    return room.properties.roomLink !== undefined;
-  });
+
+function onRoomLinkHandler(roomLink) {
 
   room.extend(`pauseGame`, ({ previousFunction: pauseGame }, pause) => {
     pauseGame(pause);
-    room.properties.paused = pause;
+
+    if (room.isGameStarted()) {
+      room.properties.paused = pause;
+    }
   });
 
   room.extend(`isGamePaused`, () => {
@@ -43,20 +59,37 @@ room.onLoad = () => {
     return room.getScores() !== null;
   });
 
+  room.extend(`startGame`, ({ previousFunction: startGame }) => {
+    // Set paused state to false on game start
+    if (!room.isGameStarted()) {
+      room.properties.paused = false;
+    }
+
+    startGame();
+
+    room.properties.started = true;
+  });
+
+  room.extend(`stopGame`, ({ previousFunction: stopGame }) => {
+    // Set paused state to false on game stop
+    room.properties.paused = false;
+
+    stopGame();
+
+    room.properties.started = false;
+  });
+
   room.extend(`getRoomLink`, () => {
-    return room.properties.roomLink;
+    return roomLink;
   });
 
   room
   // Event state validators
-  .addEventStateValidator(`onPlayerChat`, ({ metadata }) => {
-    return metadata.returnValue !== false;
-  })
   .addEventStateValidator(`onGameStart`, () => {
-    return room.getScores() !== null;
+    return room.properties.started === true;
   })
   .addEventStateValidator(`onGameStop`, () => {
-    return room.getScores() === null;
+    return room.properties.started === false;
   })
   .addEventStateValidator(`onGamePause`, () => {
     return room.properties.paused === true;
@@ -70,5 +103,17 @@ room.onLoad = () => {
   })
   .addPreEventHandlerHook(`onGameUnpause`, () => {
     room.properties.paused = false;
+  })
+  .addPreEventHandlerHook(`onGameStart`, () => {
+    room.properties.started = true;
+  })
+  .addPreEventHandlerHook(`onGameStop`, () => {
+    room.properties.started = false;
   });
-};
+}
+
+//
+// Exports
+//
+
+room.onRoomLink = onRoomLinkHandler;
