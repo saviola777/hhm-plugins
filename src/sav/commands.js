@@ -134,9 +134,9 @@ function triggerEvents(playerId, parsedMessage) {
       let returnValue = true;
 
       returnValue = room.triggerEvent(
-          `Command${j}_${potentialSubcommands[i]}`, playerId, arguments,
+          `onCommand${j}_${potentialSubcommands[i]}`, playerId, arguments,
           argumentString, parsedMessage.originalMessage) !== false;
-      returnValue = room.triggerEvent(`Command_${potentialSubcommands[i]}`,
+      returnValue = room.triggerEvent(`onCommand_${potentialSubcommands[i]}`,
           playerId, arguments, argumentString, parsedMessage.originalMessage)
           !== false && returnValue;
 
@@ -160,7 +160,7 @@ function parseMessage(message, numArgsMax, commandPrefix, separator) {
   numArgsMax++;
 
   if (commandPrefix === undefined) {
-    commandPrefix = room.getPluginConfig().commandPrefix;
+    commandPrefix = room.getConfig().commandPrefix;
   }
 
   if (separator === undefined) {
@@ -212,16 +212,16 @@ function parseMessage(message, numArgsMax, commandPrefix, separator) {
 function onPlayerChatHandler(player, message, { returnValue }) {
   if (returnValue === false) return false;
 
-  message = room.getPluginConfig().commandPrefix !== ` `
+  message = room.getConfig().commandPrefix !== ` `
       ? message.trimStart() : message;
 
   const parsedMessage = room.parseMessage(message);
 
   if (parsedMessage.command !== ``) {
-    const hideMessage = room.getPluginConfig().multiCommandPrefixHidesMessage
+    const hideMessage = room.getConfig().multiCommandPrefixHidesMessage
         && (message.length !== removeMultiCommandPrefix(message,
-            room.getPluginConfig().commandPrefix).length);
-    const hideCommands = room.getPluginConfig().hideCommands;
+            room.getConfig().commandPrefix).length);
+    const hideCommands = room.getConfig().hideCommands;
 
     // Display message, but to player only
     if (!hideMessage && hideCommands === 1) {

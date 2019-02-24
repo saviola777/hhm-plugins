@@ -85,23 +85,23 @@ let globalTickCount = 0;
 /**
  * TODO documentation
  */
-function createCronJob(event, unit) {
-  const time = parseInt(event.substr(4, event.length - 4 - unit.length));
+function createCronJob(handlerName, unit) {
+  const time = parseInt(handlerName.substr(6, handlerName.length - 6 - unit.length));
 
   if (isNaN(time)) return;
 
   const numSeconds = time * units[unit];
 
-  realTimeCronJobs.push(event);
+  realTimeCronJobs.push(handlerName);
 
-  setInterval(() => room.triggerEvent(event), numSeconds * 1000);
+  setInterval(() => room.triggerEvent(handlerName), numSeconds * 1000);
 }
 
 /**
  * TODO documentation
  */
-function createGameTimeCronJob(event, unit) {
-  const time = parseInt(event.substr(4, event.length - 8 - unit.length));
+function createGameTimeCronJob(handlerName, unit) {
+  const time = parseInt(handlerName.substr(6, handlerName.length - 10 - unit.length));
 
   if (isNaN(time) || time <= 0) return;
 
@@ -109,9 +109,9 @@ function createGameTimeCronJob(event, unit) {
 
   let tickCounter = 1;
 
-  gameTickCronJobs[event] = function() {
+  gameTickCronJobs[handlerName] = function() {
     if (tickCounter === 0) {
-      room.triggerEvent(event);
+      room.triggerEvent(handlerName);
     }
 
     tickCounter = Math.min(tickCounter + gameTicks, numTicks) % numTicks;
@@ -121,15 +121,15 @@ function createGameTimeCronJob(event, unit) {
 /**
  * TODO documentation
  */
-function createOneTimeCronJob(event, unit, pluginId) {
-  const time = parseInt(event.substr(4, event.length - 4 - unit.length));
+function createOneTimeCronJob(handlerName, unit, pluginId) {
+  const time = parseInt(handlerName.substr(6, handlerName.length - 6 - unit.length));
 
   if (isNaN(time)) return;
 
   const numSeconds = time * units[unit];
 
   const plugin = room.getPluginManager().getPluginById(pluginId);
-  const propertyName = `on${event}Once`;
+  const propertyName = handlerName + `Once`;
 
   const fn = plugin[propertyName];
   delete plugin[propertyName];
@@ -148,49 +148,48 @@ function createOneTimeCronJob(event, unit, pluginId) {
  * TODO documentation
  */
 function setupCronJobs() {
-  gameTicks = room.getPluginConfig().gameTicks;
-  let eventNames = room.getPluginManager().getHandlerNames()
-    .filter(h => h.startsWith(`onCron`))
-    .map(h => h.substr(2));
+  gameTicks = room.getConfig().gameTicks;
+  let handlerNames = room.getPluginManager().getHandlerNames()
+      .filter(h => h.startsWith(`onCron`));
 
-  for (let eventName of eventNames) {
+  for (let handlerName of handlerNames) {
     // Skip existing cron jobs
-    if (realTimeCronJobs.indexOf(eventName) !== -1
-        || Object.getOwnPropertyNames(gameTickCronJobs).indexOf(eventName)
+    if (realTimeCronJobs.indexOf(handlerName) !== -1
+        || Object.getOwnPropertyNames(gameTickCronJobs).indexOf(handlerName)
         !== -1) {
       continue;
     }
 
     for (let unit of Object.getOwnPropertyNames(units)) {
-      if (!eventName.endsWith(unit)) continue;
+      if (!handlerName.endsWith(unit)) continue;
 
-      if (eventName.endsWith(`Game${unit}`)) {
-        createGameTimeCronJob(eventName, unit);
+      if (handlerName.endsWith(`Game${unit}`)) {
+        createGameTimeCronJob(handlerName, unit);
         break;
       }
 
-      createCronJob(eventName, unit);
+      createCronJob(handlerName, unit);
       break;
     }
   }
 
   // Handle one time cron jobs
   for (let plugin of room.getPluginManager().getEnabledPluginIds()
-    .map(id => room.getPluginManager().getPluginById(id))) {
+      .map(id => room.getPluginManager().getPluginById(id))) {
 
-    eventNames = plugin.getHandlerNames()
-      .filter(h => h.startsWith(`onCron`) && h.endsWith(`Once`))
-      .map(h => h.substr(2, h.length - 6))
-      .filter(h => Object.getOwnPropertyNames(units)
-        .filter(u => { return h.endsWith(u) }).length === 1);
+    handlerNames = plugin.getHandlerNames()
+        .filter(h => h.startsWith(`onCron`) && h.endsWith(`Once`))
+        .map(h => h.substr(0, h.length - 4))
+        .filter(h => Object.getOwnPropertyNames(units)
+          .filter(u => { return h.endsWith(u) }).length === 1);
 
-    if (eventNames.length === 0) {
+    if (handlerNames.length === 0) {
       continue;
     }
 
-    eventNames
-      .map(e => createOneTimeCronJob(e, Object.getOwnPropertyNames(units)
-        .filter(u => {return e.endsWith(u) })[0], plugin._id));
+    handlerNames.forEach(
+        e => createOneTimeCronJob(e, Object.getOwnPropertyNames(units).filter(
+            u => {return e.endsWith(u) })[0], plugin._id));
   }
 }
 
@@ -203,7 +202,7 @@ function setupCronJobs() {
  */
 function onGameTickHandler() {
   if (globalTickCount === 0) {
-    gameTicks = room.getPluginConfig().gameTicks;
+    gameTicks = room.getConfig().gameTicks;
     for (let event of Object.getOwnPropertyNames(gameTickCronJobs)) {
       gameTickCronJobs[event]();
     }
@@ -212,13 +211,14 @@ function onGameTickHandler() {
   globalTickCount = Math.min(globalTickCount + 1, gameTicks) % gameTicks;
 }
 
+function onHhmPropertySetHandler() {
+  setupCronJobs();
+}
+
 /**
- * Pick up initial cron jobs and register as room manager observer to pick up
- * future cron jobs immediately.
+ * Pick up initial cron jobs.
  */
 function onRoomLinkHandler() {
-  room.getPluginManager().registerEventHandler(
-      () => setupCronJobs(), [HHM.events.PROPERTY_SET]);
   setupCronJobs();
 }
 
@@ -228,3 +228,4 @@ function onRoomLinkHandler() {
 
 room.onGameTick = onGameTickHandler;
 room.onRoomLink = onRoomLinkHandler;
+room.onHhm_propertySet = onHhmPropertySetHandler;

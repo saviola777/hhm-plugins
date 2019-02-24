@@ -10,6 +10,9 @@
  *
  * Changelog:
  *
+ * 1.2.0:
+ *  - move non-plugin event handlers of the HHM to this plugin
+ *
  * 1.1.0:
  *  - improved book-keeping and event state validation for paused and
  *    started/stopped game states
@@ -24,7 +27,7 @@ const room = HBInit();
 room.pluginSpec = {
   name: `hhm/core`,
   author: `saviola`,
-  version: `1.1.0`,
+  version: `1.2.0`,
   dependencies: [
     `hhm/core` // Can't be disabled
   ],
@@ -34,12 +37,48 @@ room.pluginSpec = {
 // Global variables
 //
 
-room.properties = { paused: false, started: false };
+const properties = { paused: false, started: false };
 
 //
 // Event handlers
 //
 
+function onHhmPluginStateChangeHandler() {
+  room.getPluginManager().getRoomManager().handlersDirty = true;
+}
+
+/**
+ * Synchronizes the plugin name when the pluginSpec or _name is set.
+ */
+function onHhmPropertySetHandler({ plugin, propertyName, propertyValue }) {
+  // Register plugin name after setting the plugin specification
+  if (propertyName === `pluginSpec`) {
+
+    if (propertyValue.hasOwnProperty(`name`)
+        && propertyValue.name !== plugin._name) {
+
+      plugin._name = propertyValue.name;
+
+    } else if (plugin._name !== plugin._id) {
+      propertyValue.name = plugin._name;
+    }
+
+    plugin.setConfig();
+
+    return true;
+  }
+
+  if (propertyName === `_name`) {
+    if (plugin.pluginSpec === undefined) {
+      plugin.pluginSpec = {};
+    }
+
+    plugin.pluginSpec.name = propertyValue;
+    room.getPluginManager().room._pluginIds[propertyValue] = plugin._id;
+
+    return true;
+  }
+}
 
 function onRoomLinkHandler(roomLink) {
 
@@ -47,12 +86,12 @@ function onRoomLinkHandler(roomLink) {
     pauseGame(pause);
 
     if (room.isGameStarted()) {
-      room.properties.paused = pause;
+      properties.paused = pause;
     }
   });
 
   room.extend(`isGamePaused`, () => {
-    return room.properties.paused === true;
+    return properties.paused === true;
   });
 
   room.extend(`isGameStarted`, () => {
@@ -62,21 +101,21 @@ function onRoomLinkHandler(roomLink) {
   room.extend(`startGame`, ({ previousFunction: startGame }) => {
     // Set paused state to false on game start
     if (!room.isGameStarted()) {
-      room.properties.paused = false;
+      properties.paused = false;
     }
 
     startGame();
 
-    room.properties.started = true;
+    properties.started = true;
   });
 
   room.extend(`stopGame`, ({ previousFunction: stopGame }) => {
     // Set paused state to false on game stop
-    room.properties.paused = false;
+    properties.paused = false;
 
     stopGame();
 
-    room.properties.started = false;
+    properties.started = false;
   });
 
   room.extend(`getRoomLink`, () => {
@@ -86,30 +125,36 @@ function onRoomLinkHandler(roomLink) {
   room
   // Event state validators
   .addEventStateValidator(`onGameStart`, () => {
-    return room.properties.started === true;
+    return properties.started === true;
   })
   .addEventStateValidator(`onGameStop`, () => {
-    return room.properties.started === false;
+    return properties.started === false;
   })
   .addEventStateValidator(`onGamePause`, () => {
-    return room.properties.paused === true;
+    return properties.paused === true;
   })
   .addEventStateValidator(`onGameUnpause`, () => {
-    return room.properties.paused === false;
+    return properties.paused === false;
+  })
+  // Prevent native onRoomLink events from propagating
+  .addEventStateValidator(`onRoomLink`, () => {
+    return false;
   })
   // Pre and post event handler hooks
   .addPreEventHandlerHook(`onGamePause`, () => {
-    room.properties.paused = true;
+    properties.paused = true;
   })
   .addPreEventHandlerHook(`onGameUnpause`, () => {
-    room.properties.paused = false;
+    properties.paused = false;
   })
   .addPreEventHandlerHook(`onGameStart`, () => {
-    room.properties.started = true;
+    properties.started = true;
   })
   .addPreEventHandlerHook(`onGameStop`, () => {
-    room.properties.started = false;
+    properties.started = false;
   });
+
+  onHhmPluginStateChangeHandler();
 }
 
 //
@@ -117,3 +162,6 @@ function onRoomLinkHandler(roomLink) {
 //
 
 room.onRoomLink = onRoomLinkHandler;
+room.onHhm_pluginLoaded = room.onHhm_pluginDisabled = room.onHhm_pluginEnabled
+  = onHhmPluginStateChangeHandler;
+room.onHhm_propertySet = onHhmPropertySetHandler;

@@ -75,7 +75,7 @@ function addOrUpdateRole(role, password) {
     password = ``;
   }
 
-  room.getPluginConfig().roles[role] = password;
+  room.getConfig().roles[role] = password;
 }
 
 /**
@@ -145,7 +145,7 @@ function hasPlayerRole(playerId, role) {
  * Returns whether the given role is among the known roles.
  */
 function hasRole(role) {
-  return room.getPluginConfig().roles.hasOwnProperty(role);
+  return room.getConfig().roles.hasOwnProperty(role);
 }
 
 /**
@@ -185,9 +185,9 @@ function removePlayerRole(playerId, role) {
  * TODO add option to disable triggering events?
  */
 function removeRole(role) {
-  const returnValue = delete room.getPluginConfig().roles[role];
+  const returnValue = delete room.getConfig().roles[role];
 
-  room.getPlayerList().map((p) => {
+  room.getPlayerList().forEach((p) => {
     removePlayerRole(p.id, role);
   });
 
@@ -212,10 +212,10 @@ function triggerAuthenticationEvents(playerId, role, added) {
 
   const addedString = added ? `Added` : `Removed`;
 
-  room.triggerEvent(`PlayerRole`, playerId, role, added);
-  room.triggerEvent(`PlayerRole_${role}`, playerId, added);
-  room.triggerEvent(`PlayerRole${addedString}`, playerId, role);
-  room.triggerEvent(`PlayerRole${addedString}_${role}`, playerId);
+  room.triggerEvent(`onPlayerRole`, playerId, role, added);
+  room.triggerEvent(`onPlayerRole_${role}`, playerId, added);
+  room.triggerEvent(`onPlayerRole${addedString}`, playerId, role);
+  room.triggerEvent(`onPlayerRole${addedString}_${role}`, playerId);
 }
 
 //
@@ -227,7 +227,7 @@ function triggerAuthenticationEvents(playerId, role, added) {
  */
 function onCommandAuthHandler(playerId, arguments, argumentString, message) {
 
-  const roles = room.getPluginConfig().roles;
+  const roles = room.getConfig().roles;
   const player = room.getPlayer(playerId);
 
   if (arguments.length < 2) {
@@ -241,14 +241,14 @@ function onCommandAuthHandler(playerId, arguments, argumentString, message) {
 
   if (roles.hasOwnProperty(role) && roles[role] === password
       && roles[role] !== ``) {
-    room.addPlayerRole(playerId, role, room.getPluginConfig().persistentRoles);
-    if (room.getPluginConfig().printAuthEventsToRoom) {
+    room.addPlayerRole(playerId, role, room.getConfig().persistentRoles);
+    if (room.getConfig().printAuthEventsToRoom) {
       room.sendChat(`${player.name} authenticated for role ${role}`);
     } else {
       room.sendChat(`You authenticated for role ${role}`, playerId);
     }
   } else {
-    if (room.getPluginConfig().printAuthEventsToRoom) {
+    if (room.getConfig().printAuthEventsToRoom) {
       room.sendChat(`${player.name} failed to authenticate for role ${role}`);
     } else {
       room.sendChat(`Unknown role ${role} or wrong password`, playerId);
@@ -263,9 +263,9 @@ function onCommandAuthHandler(playerId, arguments, argumentString, message) {
  */
 function onRoomLinkHandler() {
   getPlayerAuth = room.getPlugin(`sav/players`)
-      .buildPlayerNamespaceGetter(`sav/roles`);
+      .buildPlayerPluginDataGetter(`sav/roles`);
   getUserAuth = room.getPlugin(`sav/players`)
-      .buildUserNamespaceGetter(`sav/roles`);
+      .buildUserPluginDataGetter(`sav/roles`);
 
   room.getPlugin(`sav/help`).registerHelp(`auth`, ` ROLE PASSWORD`);
 }
@@ -282,11 +282,11 @@ function onPlayerAdminChangeHandler(player) {
  */
 function onPlayerJoinHandler(player) {
   provideAuthenticationInfo(player.id);
-  if (typeof room.getPluginConfig().defaultRole !== `undefined`) {
-    room.addPlayerRole(player.id, room.getPluginConfig().defaultRole);
+  if (typeof room.getConfig().defaultRole !== `undefined`) {
+    room.addPlayerRole(player.id, room.getConfig().defaultRole);
   }
 
-  [...getUserAuth(player.id).roles].map((role) => {
+  [...getUserAuth(player.id).roles].forEach((role) => {
     addPlayerRole(player.id, role);
   });
 }

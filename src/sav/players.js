@@ -13,6 +13,10 @@
  *
  * Changelog:
  *
+ * 1.2.1:
+ *  - add support for persistence of user data
+ *  - minor API changes, no more functions on the player / user objects
+ *
  * 1.2.0:
  *  - distinguish between user and player, otherwise the plugin would get
  *    confused with several players in the room having the same auth
@@ -39,7 +43,7 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/players`,
   author: `saviola`,
-  version: `1.2.0`,
+  version: `1.2.1`,
   config: {
     maxPlayerNameLength: 15,
     addPlayerIdToNickname: true,
@@ -83,22 +87,22 @@ let getPlayerNative;
 //
 
 /**
- * Convenience function to create a player namespace getter for the given
- * namespace.
+ * Convenience function to create a player data getter for the given
+ * plugin.
  */
-function buildPlayerNamespaceGetter(namespace) {
+function buildPlayerPluginDataGetter(pluginName) {
   return (playerId) => {
-    return room.getPlayer(playerId, true).getNamespace(namespace);
+    return getPlayerData(playerId, pluginName);
   };
 }
 
 /**
- * Convenience function to create a user namespace getter for the given
- * namespace.
+ * Convenience function to create a user data getter for the given
+ * plugin.
  */
-function buildUserNamespaceGetter(namespace) {
+function buildUserPluginDataGetter(pluginName) {
   return (playerId) => {
-    return room.getPlayer(playerId, true).getUser().getNamespace(namespace);
+    return getUserData(idToAuth[playerId], pluginName);
   };
 }
 
@@ -114,20 +118,8 @@ function createInitialPlayerObject(player) {
     'originalName': player.name,
     'team': player.team,
 
-    '_namespaces': {
+    '_pluginData': {
     },
-
-    'getNamespace': function(namespace = `_`) {
-      if (this._namespaces[namespace] === undefined) {
-        this._namespaces[namespace] = {};
-      }
-
-      return this._namespaces[namespace];
-    },
-
-    'getUser': function() {
-      return usersByAuth[idToAuth[player.id]];
-    }
   };
 }
 
@@ -136,21 +128,13 @@ function createInitialPlayerObject(player) {
  */
 function createInitialUserdataObject() {
   return {
-    '_namespaces': {
-      '_': {
+    '_pluginData': {
+      'sav/players': {
         'seen': new Date(),
         'conns': new Set(),
         'ids': new Set(),
         'names': new Set(),
       },
-    },
-
-    'getNamespace': function(namespace = `_`) {
-      if (this._namespaces[namespace] === undefined) {
-        this._namespaces[namespace] = {};
-      }
-
-      return this._namespaces[namespace];
     },
   };
 }
@@ -159,18 +143,31 @@ function createInitialUserdataObject() {
  * TODO documentation
  */
 function createPlayerName(player) {
-  const nameLength = room.getPluginConfig().maxPlayerNameLength;
+  const nameLength = room.getConfig().maxPlayerNameLength;
   let playerName = player.name;
-  if (room.getPluginConfig().maxPlayerNameLength > 0) {
+  if (room.getConfig().maxPlayerNameLength > 0) {
     playerName = playerName.length <= nameLength ? playerName
         : playerName.substr(0, nameLength - 1) + '…';
   }
 
-  if (room.getPluginConfig().addPlayerIdToNickname) {
+  if (room.getConfig().addPlayerIdToNickname) {
     playerName += `#${player.id}`;
   }
 
   return playerName;
+}
+
+function getData(object, pluginName) {
+  if (object === undefined) {
+    return undefined;
+  }
+
+
+  if (object._pluginData[pluginName] === undefined) {
+    object._pluginData[pluginName] = {};
+  }
+
+  return object._pluginData[pluginName];
 }
 
 /**
@@ -193,6 +190,38 @@ function getPlayer({ previousFunction }, playerId,
  */
 function getPlayerById(playerId, defaultValue = undefined) {
   return playersById[playerId] || defaultValue;
+}
+
+/**
+ * TODO documentation
+ */
+function getPlayerData(playerId, pluginName = `sav/players`) {
+  const player = getPlayerById(playerId);
+
+  return getData(player, pluginName);
+}
+
+/**
+ * TODO documentation
+ */
+function getUserByAuth(auth) {
+  return usersByAuth[auth];
+}
+
+/**
+ * TODO documentation
+ */
+function getUserById(playerId) {
+  return usersByAuth[idToAuth[playerId]];
+}
+
+/**
+ * TODO documentation
+ */
+function getUserData(auth, pluginName = `sav/players`) {
+  const user = usersByAuth[auth];
+
+  return getData(user, pluginName);
 }
 
 /**
@@ -249,38 +278,16 @@ function setPlayerTeam({ previousFunction }, playerId,
 // Event handlers
 //
 
-function onRoomLinkHandler() {
-  getPlayerNative = room.getPlayer;
-  room.extend(`getPlayer`, getPlayer);
-  room.extend(`getPlayerList`, getPlayerList);
-  room.extend(`kickPlayer`, kickPlayer);
-  room.extend(`setPlayerAdmin`, setPlayerAdmin);
-  room.extend(`setPlayerTeam`, setPlayerTeam);
-
-  room.addEventStateValidator(`onPlayerJoin`,
-      onPlayerJoinEventStateValidator);
-
-  room.addPreEventHandlerHook(`onPlayerAdminChange`,
-      onPlayerAdminChangePreEventHandlerHook);
-  room.addPreEventHandlerHook(`onPlayerJoin`,
-      onPlayerJoinPreEventHandlerHook);
-  room.addPreEventHandlerHook(`onPlayerTeamChange`,
-      onPlayerTeamChangePreEventHandlerHook);
-
-  // Create authentication data entry for host
-  // TODO solve cleaner
-  // TODO handle players already in the room
-  const hostPlayer = getPlayerNative(0);
-  playersById[0] = createInitialPlayerObject(hostPlayer);
-  usersByAuth[`HOST_AUTH`] = createInitialUserdataObject();
-  const ns = usersByAuth[`HOST_AUTH`].getNamespace();
-  ns.ids.add(0);
-  ns.conns.add(`HOST_CONN`);
-  ns.names.add(hostPlayer.name); // TODO make dynamic
-  ns.seen = new Date();
-  ns.online = true;
-  playersByConn[`HOST_CONN`] = new Set().add(`HOST_AUTH`);
-  idToAuth[0] = `HOST_AUTH`;
+/**
+ * TODO documentation
+ */
+function onPersistHandler() {
+  return {
+    usersByAuth,
+    idToAuth,
+    playersByConn,
+    playersById,
+  }
 }
 
 /**
@@ -311,12 +318,12 @@ function onPlayerJoinPreEventHandlerHook({}, player) {
 
   playersById[player.id] = createInitialPlayerObject(player);
 
-  const ns = usersByAuth[player.auth].getNamespace();
-  ns.ids.add(player.id);
-  ns.conns.add(player.conn);
-  ns.names.add(player.originalName);
-  ns.seen = new Date();
-  ns.online = true;
+  const userData = getUserData(player.auth);
+  userData.ids.add(player.id);
+  userData.conns.add(player.conn);
+  userData.names.add(player.originalName);
+  userData.seen = new Date();
+  userData.online = true;
 
   if (playersByConn[player.conn] === undefined) {
     playersByConn[player.conn] = new Set();
@@ -338,9 +345,9 @@ function onPlayerLeaveHandler(playerNative) {
     return;
   }
 
-  const ns = usersByAuth[idToAuth[playerNative.id]].getNamespace();
-  ns.seen = new Date();
-  ns.online = false;
+  const userData = getUserData(idToAuth[playerNative.id]);
+  userData.seen = new Date();
+  userData.online = false;
   player.online = false;
 }
 
@@ -355,12 +362,70 @@ function onPlayerTeamChangePreEventHandlerHook({}, player) {
   getPlayerById(player.id, {}).team = player.team;
 }
 
+/**
+ * TODO documentation
+ *
+ * TODO handle restored config
+ */
+function onRestoreHandler(data, pluginSpec) {
+  if (data === undefined) return;
+
+  $.extend(usersByAuth, data.usersByAuth);
+
+  // Remove all references to previous ID
+  Object.getOwnPropertyNames(usersByAuth)
+      .forEach((auth) => getUserData(auth).ids.clear());
+}
+
+/**
+ * TODO documentation
+ */
+function onRoomLinkHandler() {
+  getPlayerNative = room.getPlayer;
+  room.extend(`getPlayer`, getPlayer);
+  room.extend(`getPlayerList`, getPlayerList);
+  room.extend(`kickPlayer`, kickPlayer);
+  room.extend(`setPlayerAdmin`, setPlayerAdmin);
+  room.extend(`setPlayerTeam`, setPlayerTeam);
+
+  room.addEventStateValidator(`onPlayerJoin`,
+      onPlayerJoinEventStateValidator);
+
+  room.addPreEventHandlerHook(`onPlayerAdminChange`,
+      onPlayerAdminChangePreEventHandlerHook);
+  room.addPreEventHandlerHook(`onPlayerJoin`,
+      onPlayerJoinPreEventHandlerHook);
+  room.addPreEventHandlerHook(`onPlayerTeamChange`,
+      onPlayerTeamChangePreEventHandlerHook);
+
+  // Create authentication data entry for host
+  // TODO solve cleaner
+  // TODO handle players already in the room
+  const hostPlayer = getPlayerNative(0);
+  playersById[0] = createInitialPlayerObject(hostPlayer);
+  usersByAuth[`HOST_AUTH`] = createInitialUserdataObject();
+  const userData = getUserData(`HOST_AUTH`);
+  userData.ids.add(0);
+  userData.conns.add(`HOST_CONN`);
+  userData.names.add(hostPlayer.name); // TODO make dynamic
+  userData.seen = new Date();
+  userData.online = true;
+  playersByConn[`HOST_CONN`] = new Set().add(`HOST_AUTH`);
+  idToAuth[0] = `HOST_AUTH`;
+}
+
 //
 // Exports
 //
 
-room.buildPlayerNamespaceGetter = buildPlayerNamespaceGetter;
-room.buildUserNamespaceGetter = buildUserNamespaceGetter;
+room.buildPlayerPluginDataGetter = buildPlayerPluginDataGetter;
+room.buildUserPluginDataGetter = buildUserPluginDataGetter;
+room.getPlayerData = getPlayerData;
+room.getUser = getUserById;
+room.getUserData = getUserData;
+room.hasPlayer = hasPlayer;
 
-room.onRoomLink = onRoomLinkHandler;
+room.onPersist = onPersistHandler;
 room.onPlayerLeave = onPlayerLeaveHandler;
+room.onRestore = onRestoreHandler;
+room.onRoomLink = onRoomLinkHandler;

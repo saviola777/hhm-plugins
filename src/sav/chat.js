@@ -75,7 +75,7 @@ room.pluginSpec = {
 
 const channels = {};
 const channelTypes = { AUTO: `auto`, MANUAL: `manual`};
-const config = room.getPluginConfig();
+const config = room.getConfig();
 const teamChannelNames = [`spec`, `red`, `blue`];
 const reservedChannelNames = { GLOBAL: `global` };
 
@@ -234,7 +234,7 @@ function sendChat({ callingPluginName }, message, playerId, prefix = []) {
     prefix.unshift(`PM`);
   }
 
-  if (config.pluginPrefix) {
+  if (config.pluginPrefix && callingPluginName !== undefined) {
     prefix.unshift(callingPluginName);
   }
 
@@ -403,7 +403,7 @@ function onCommandChatChannelSwitch(playerId, [channel]) {
  */
 function onRoomLinkHandler() {
   sendChatNative = room.sendChat;
-  getChatInfo = room.getPlugin(`sav/players`).buildPlayerNamespaceGetter(`sav/chat`);
+  getChatInfo = room.getPlugin(`sav/players`).buildPlayerPluginDataGetter(`sav/chat`);
   room.extend(`sendChat`, sendChat);
 
   if (config.enableChannels) {

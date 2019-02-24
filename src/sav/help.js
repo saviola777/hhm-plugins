@@ -74,7 +74,7 @@ function displayHelp(playerId, command) {
  * TODO documentation
  */
 function getCommandPrefix() {
-  return room.getPlugin(`sav/commands`).getPluginConfig().commandPrefix;
+  return room.getPlugin(`sav/commands`).getConfig().commandPrefix;
 }
 
 /**
