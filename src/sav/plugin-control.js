@@ -9,6 +9,9 @@
  *
  * Changelog:
  *
+ * 1.0.2:
+ *  - adjust to HHM 0.9.1
+ *
  * 1.0.1:
  *  - add support for enabling and disabling plugins from within the room
  *
@@ -22,7 +25,7 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/plugin-control`,
   author: `saviola`,
-  version: `1.0.1`,
+  version: `1.0.2`,
   dependencies: [
     `sav/help`,
     `sav/roles`,
@@ -60,7 +63,9 @@ function makeRawUrl(url) {
 /**
  * TODO documentation
  */
-async function onCommandPluginLoadHandler(playerId, arguments) {
+async function onCommandPluginLoadHandler(player, arguments) {
+  const playerId = player.id;
+
   if (!roles.ensurePlayerRole(playerId, `host`, room, `plugin load`)) {
     return;
   }
@@ -100,7 +105,9 @@ async function onCommandPluginLoadHandler(playerId, arguments) {
 /**
  * TODO documentation
  */
-function onCommandPluginDisableHandler(playerId, [pluginName]) {
+function onCommandPluginDisableHandler(player, [pluginName]) {
+  const playerId = player.id;
+
   if (!roles.ensurePlayerRole(playerId, `host`, room, `plugin disable`)) {
     return;
   }
@@ -118,7 +125,8 @@ function onCommandPluginDisableHandler(playerId, [pluginName]) {
 
   if (!manager.disablePluginById(manager.getPluginId(pluginName))) {
     // TODO more error information
-    return room.sendChat(`Could not disable plugin ${pluginName}`);
+    return room.sendChat(`Could not disable plugin ${pluginName}`, playerId,
+        HHM.log.level.ERROR);
   }
 
   room.sendChat(`Plugin ${pluginName} disabled by player ` +
@@ -128,7 +136,9 @@ function onCommandPluginDisableHandler(playerId, [pluginName]) {
 /**
  * TODO documentation
  */
-function onCommandPluginEnableHandler(playerId, [pluginName]) {
+function onCommandPluginEnableHandler(player, [pluginName]) {
+  const playerId = player.id;
+
   if (!roles.ensurePlayerRole(playerId, `host`, room, `plugin enable`)) {
     return;
   }

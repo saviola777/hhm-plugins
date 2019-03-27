@@ -53,6 +53,9 @@
  *
  * Changelog:
  *
+ * 1.4.1:
+ *  - adjust to HHM 0.9.1, player objects are now passed to event handlers
+ *
  * 1.4.0:
  *  - add config option to control how commands are displayed
  *
@@ -77,7 +80,7 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/commands`,
   author: `saviola`,
-  version: `1.4.0`,
+  version: `1.4.1`,
   config: {
     commandPrefix: `!`,
     hideCommands: 1,
@@ -128,16 +131,17 @@ function triggerEvents(playerId, parsedMessage) {
 
     // As soon as we have a match, trigger events and return
     if (subcommandEventHandlers.length > 0) {
+      const player = room.getPlayer(playerId);
       const j = parsedMessage.arguments.length - i;
       const arguments = parsedMessage.arguments.slice(i);
       const argumentString = arguments.join(parsedMessage.separator);
       let returnValue = true;
 
       returnValue = room.triggerEvent(
-          `onCommand${j}_${potentialSubcommands[i]}`, playerId, arguments,
+          `onCommand${j}_${potentialSubcommands[i]}`, player, arguments,
           argumentString, parsedMessage.originalMessage) !== false;
       returnValue = room.triggerEvent(`onCommand_${potentialSubcommands[i]}`,
-          playerId, arguments, argumentString, parsedMessage.originalMessage)
+          player, arguments, argumentString, parsedMessage.originalMessage)
           !== false && returnValue;
 
       return returnValue;

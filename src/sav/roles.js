@@ -25,6 +25,9 @@
  *
  * Changelog:
  *
+ * 1.1.1:
+ *  - adjust to HHM 0.9.1
+ *
  * 1.1.0:
  *  - authentication information are no longer deleted when a player leaves
  *  - explicitly assigned roles can now be made persistent, so a player can
@@ -39,7 +42,7 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/roles`,
   author: `saviola`,
-  version: `1.1.0`,
+  version: `1.1.1`,
   dependencies: [
     `sav/commands`,
     `sav/help`,
@@ -138,7 +141,7 @@ function getRoles(playerId) {
 function hasPlayerRole(playerId, role) {
   provideAuthenticationInfo(playerId);
 
-  return getPlayerAuth(playerId).has(role);
+  return getPlayerAuth(playerId).roles.has(role);
 }
 
 /**
@@ -225,10 +228,10 @@ function triggerAuthenticationEvents(playerId, role, added) {
 /**
  * TODO documentation
  */
-function onCommandAuthHandler(playerId, arguments, argumentString, message) {
+function onCommandAuthHandler(player, arguments, argumentString, message) {
 
   const roles = room.getConfig().roles;
-  const player = room.getPlayer(playerId);
+  const playerId = player.id;
 
   if (arguments.length < 2) {
     room.getPlugin(`sav/help`).displayHelp(playerId, `auth`);

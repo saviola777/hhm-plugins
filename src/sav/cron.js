@@ -37,6 +37,9 @@
  *
  * Changelog:
  *
+ * 1.1.2:
+ *  - adjust to HHM 0.9.1
+ *
  * 1.1.1:
  *  - refactoring
  *
@@ -57,7 +60,7 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/cron`,
   author: `saviola`,
-  version: `1.1.1`,
+  version: `1.1.2`,
   config: {
     gameTicks: 60,
   }
@@ -136,7 +139,7 @@ function createOneTimeCronJob(handlerName, unit, pluginId) {
 
   setTimeout(() => {
     // Either execute or re-queue function
-    if (room.getPluginManager().isPluginEnabled(pluginId)) {
+    if (room.getPluginManager().getPluginById(pluginId).isEnabled()) {
       fn();
     } else {
       plugin[propertyName] = fn;

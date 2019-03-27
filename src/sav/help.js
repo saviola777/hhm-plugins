@@ -23,6 +23,9 @@
  *
  * Changelog:
  *
+ * 1.0.2:
+ *  - adjust to HHM 0.9.1
+ *
  * 1.0.1:
  *  - add programmatic way to display help texts using displayHelp().
  *
@@ -38,7 +41,7 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/help`,
   author: `saviola`,
-  version: `1.0.1`,
+  version: `1.0.2`,
   dependencies: [
     `sav/commands`
   ],
@@ -116,9 +119,10 @@ function prepareCommand(command) {
 function registerHelp(command, helpText) {
   command = prepareCommand(command);
 
-  helpText = `Usage: ${getCommandPrefix()}${command.split(`_`).join(` `)}${helpText}`;
+  helpText = `Usage: ${getCommandPrefix()}`
+      + `${command.split(`_`).join(` `)}${helpText}`;
 
-  room[`onCommand_help_${command}`] = (playerId) => room.sendChat(helpText, playerId);
+  room[`onCommand_help_${command}`] = (player) => room.sendChat(helpText, player.id);
 
   return room;
 }
@@ -130,17 +134,17 @@ function registerHelp(command, helpText) {
 /**
  * General help command, which lists all available commands.
  */
-function onCommandHelp0Handler(playerId) {
+function onCommandHelp0Handler(player) {
   room.sendChat(`List of available commands, type ${getCommandPrefix()}help `
-    + `command to get help for a specific command:`, playerId);
-  room.sendChat(createCommandList().join(`, `), playerId);
+    + `command to get help for a specific command:`, player.id);
+  room.sendChat(createCommandList().join(`, `), player.id);
 }
 
 /**
  * Catch-all help function which gets called if no specific help was registered
  * for a given help command.
  */
-function onCommandHelpHandler(playerId, arguments) {
+function onCommandHelpHandler(player, arguments) {
   if (arguments.length === 0) return;
 
   const manager = room.getPluginManager();
@@ -152,12 +156,12 @@ function onCommandHelpHandler(playerId, arguments) {
 
   if (pluginNames.length === 0) {
     room.sendChat(`No help available for the given topic, is the plugin loaded `
-        + `and enabled?`, playerId, HHM.log.ERROR);
+        + `and enabled?`, player.id, HHM.log.ERROR);
     return;
   }
 
   room.sendChat(`No help available for this command, it is handled by the `
-      + `following plugin(s): ${pluginNames.join(`, `)}`, playerId);
+      + `following plugin(s): ${pluginNames.join(`, `)}`, player.id);
 }
 
 //

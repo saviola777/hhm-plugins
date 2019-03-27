@@ -13,6 +13,11 @@
  *
  * Changelog:
  *
+ * 0.9.2:
+ *  - fix problem were using `sendChat` with non-string values would lead to
+ *    errors
+ *  - adjust to HHM 0.9.1
+ *
  * 0.9.1:
  *  - disable channels by default
  *  - add lots of config parameters for better control
@@ -43,7 +48,7 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/chat`,
   author: `saviola`,
-  version: `0.9.1`,
+  version: `0.9.2`,
   dependencies: [
     `sav/commands`,
     `sav/players`
@@ -251,6 +256,7 @@ function sendChat({ callingPluginName }, message, playerId, prefix = []) {
  * TODO extend for private messages
  */
 function sendChatRaw(message, playerId, prefix = []) {
+  message = String(message);
   let prefixWithTime;
 
   prefixWithTime = wrapInArrayOrCopy(prefix);
@@ -348,7 +354,9 @@ function wrapInArrayOrCopy(variable) {
 /**
  * TODO documentation
  */
-function onCommandChatChannelCreate(playerId, [channel, password = ``]) {
+function onCommandChatChannelCreate(player, [channel, password = ``]) {
+  const playerId = player.id;
+
   if (channel === undefined) {
     room.sendChat(`Please specify a channel name`, playerId,
         HHM.log.level.ERROR);
@@ -370,7 +378,8 @@ function onCommandChatChannelCreate(playerId, [channel, password = ``]) {
 /**
  * TODO documentation
  */
-function onCommandChatChannelSwitch(playerId, [channel]) {
+function onCommandChatChannelSwitch(player, [channel]) {
+  const playerId = player.id;
   const chatInfo = getChatInfo(playerId);
   let newChannel = channel;
 
@@ -402,8 +411,9 @@ function onCommandChatChannelSwitch(playerId, [channel]) {
  * TODO documentation
  */
 function onRoomLinkHandler() {
-  sendChatNative = room.sendChat;
-  getChatInfo = room.getPlugin(`sav/players`).buildPlayerPluginDataGetter(`sav/chat`);
+  sendChatNative = room.getParentRoom().sendChat;
+  getChatInfo = room.getPlugin(`sav/players`)
+      .buildPlayerPluginDataGetter(`sav/chat`);
   room.extend(`sendChat`, sendChat);
 
   if (config.enableChannels) {

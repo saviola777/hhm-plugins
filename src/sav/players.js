@@ -13,6 +13,10 @@
  *
  * Changelog:
  *
+ * 1.2.2:
+ *  - adjust to HHM 0.9.1
+ *  - inject player objects into native events
+ *
  * 1.2.1:
  *  - add support for persistence of user data
  *  - minor API changes, no more functions on the player / user objects
@@ -43,7 +47,7 @@ const room = HBInit();
 room.pluginSpec = {
   name: `sav/players`,
   author: `saviola`,
-  version: `1.2.1`,
+  version: `1.2.2`,
   config: {
     maxPlayerNameLength: 15,
     addPlayerIdToNickname: true,
@@ -281,6 +285,23 @@ function setPlayerTeam({ previousFunction }, playerId,
 /**
  * TODO documentation
  */
+function createPlayerInjectionPreEventHandlerHook(...argumentIndices) {
+  if (argumentIndices.length === 0) argumentIndices = [0];
+  return ({}, ...args) => {
+    for (let index of argumentIndices) {
+      // Sanity check
+      if (typeof args[index] === `object` && args[index].hasOwnProperty(`id`)) {
+        args[index] = room.getPlayer(args[index].id, true);
+      }
+    }
+
+    return args;
+  }
+}
+
+/**
+ * TODO documentation
+ */
 function onPersistHandler() {
   return {
     usersByAuth,
@@ -397,6 +418,19 @@ function onRoomLinkHandler() {
       onPlayerJoinPreEventHandlerHook);
   room.addPreEventHandlerHook(`onPlayerTeamChange`,
       onPlayerTeamChangePreEventHandlerHook);
+
+  // Inject our player objects
+  room.addPreEventHandlerHook(
+      [`onPlayerJoin`,`onPlayerLeave`,`onPlayerChat`, `onPlayerBallKick`,
+        `onGameStart`, `onGameStop`, `onGamePause`, `onGameUnpause`,
+        `onPlayerActivity`],
+      createPlayerInjectionPreEventHandlerHook());
+  room.addPreEventHandlerHook([`onPlayerAdminChange`, `onPlayerTeamChange`],
+      createPlayerInjectionPreEventHandlerHook(0, 1));
+  room.addPreEventHandlerHook(`onStadiumChange`,
+      createPlayerInjectionPreEventHandlerHook(1));
+  room.addPreEventHandlerHook(`onPlayerKicked`,
+      createPlayerInjectionPreEventHandlerHook(0, 3));
 
   // Create authentication data entry for host
   // TODO solve cleaner
