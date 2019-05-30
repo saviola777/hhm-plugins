@@ -13,6 +13,12 @@
  *
  * Changelog:
  *
+ * 0.9.3:
+ *  - use destructuring argument for sendChat prefix
+ *  - fix problem where 3 characters disappeared for continuation messages
+ *  - move some logic and configuration pertaining player nicknames from
+ *    players plugin to chat plugin
+ *
  * 0.9.2:
  *  - fix problem were using `sendChat` with non-string values would lead to
  *    errors
@@ -43,12 +49,12 @@
  * By default this limits the output to 20 lines.
  */
 
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `sav/chat`,
   author: `saviola`,
-  version: `0.9.2`,
+  version: `0.9.3`,
   dependencies: [
     `sav/commands`,
     `sav/players`
@@ -59,18 +65,20 @@ room.pluginSpec = {
     },
   },
   config: {
+    addPlayerIdToNickname: true, // only relevant if channels enabled
     commandShortcuts: true,
     enableChannels: false,
     hhmPrefix: false,
-    sendChatMaxLength: 2686,
+    maxPlayerNameLength: 15, // only relevant if channels enabled
+    playerPrefix: ` `,
     pluginPrefix: false,
     pmPrefix: true,
-    timestampPrefix: true,
     prefixStart: ``,
     prefixEnd: ` ::`,
     prefixElementStart: ``,
     prefixElementEnd: `|`,
-    playerPrefix: ` `,
+    sendChatMaxLength: 2686,
+    timestampPrefix: true,
   }
 };
 
@@ -117,6 +125,24 @@ function createChannelsObject() {
     current: ``,
     last: ``,
   }
+}
+
+/**
+ * TODO documentation
+ */
+function createPlayerName(player) {
+  const nameLength = room.getConfig().maxPlayerNameLength;
+  let playerName = player.name;
+  if (nameLength > 0) {
+    playerName = playerName.length <= nameLength ? playerName
+        : playerName.substr(0, nameLength - 1) + '…';
+  }
+
+  if (room.getConfig().addPlayerIdToNickname) {
+    playerName += `#${player.id}`;
+  }
+
+  return playerName;
 }
 
 /**
@@ -197,7 +223,7 @@ function sendPlayer(playerId, message) {
 
   const channel = getChatInfo(playerId).channels.current;
 
-  const prefix = [room.getPlayer(playerId).name];
+  const prefix = [createPlayerName(room.getPlayer(playerId))];
 
   return sendChannel(channel, message, prefix);
 }
@@ -228,7 +254,7 @@ function sendChannel(channel, message, prefix = [`HHM`]) {
  *
  * TODO non-private messages sent with this message go to the global channel?
  */
-function sendChat({ callingPluginName }, message, playerId, prefix = []) {
+function sendChat({ callingPluginName }, message, playerId, { prefix = [] } = {}) {
   prefix = wrapInArrayOrCopy(prefix);
 
   if (prefix.length === 0 && config.hhmPrefix) {
@@ -292,7 +318,7 @@ function sendChatRaw(message, playerId, prefix = []) {
 
   sendChatNative(`${p}${message.substr(0, baseIndex + 3)}...`, playerId);
 
-  let index = baseIndex;
+  let index = baseIndex + 3;
   let i = 1;
 
   while (i * 140 < config.sendChatMaxLength) {
@@ -342,7 +368,7 @@ function updateCurrentChannel(playerId, channel) {
 /**
  * Wraps the given variable in an array or copies it if it is already an array.
  */
-function wrapInArrayOrCopy(variable) {
+function wrapInArrayOrCopy(variable = []) {
   return typeof variable !== `object` || variable.constructor !== Array
       ? [variable] : variable.slice();
 }
@@ -359,11 +385,11 @@ function onCommandChatChannelCreate(player, [channel, password = ``]) {
 
   if (channel === undefined) {
     room.sendChat(`Please specify a channel name`, playerId,
-        HHM.log.level.ERROR);
+        { prefix: HHM.log.level.ERROR });
     return false;
   } else if (channelSet.has(channel)) {
     room.sendChat(`Failed to create channel &${channel}, it exists`, playerId,
-        HHM.log.level.ERROR);
+        { prefix: HHM.log.level.ERROR });
     return false;
   }
 
@@ -387,7 +413,7 @@ function onCommandChatChannelSwitch(player, [channel]) {
     if (chatInfo.channels.last === undefined
         || !isPlayerInChannel(playerId, chatInfo.channels.last)) {
       room.sendChat(`Not sure which channel to switch to`, playerId,
-          HHM.log.level.ERROR);
+          { prefix: HHM.log.level.ERROR });
       return false;
     }
 
@@ -397,7 +423,7 @@ function onCommandChatChannelSwitch(player, [channel]) {
   if (!isPlayerInChannel(playerId, newChannel)) {
     room.sendChat(
         `Can't switch to channel ${newChannel}, you need to join it first`,
-        playerId, HHM.log.level.ERROR);
+        playerId, { prefix: HHM.log.level.ERROR });
 
     return false;
   }

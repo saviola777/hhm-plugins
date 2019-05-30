@@ -9,6 +9,12 @@
  *
  * Changelog:
  *
+ * 1.1.0:
+ *  - fix wrong call to string.contains
+ *  - add "!info" command
+ *  - add "!plugin list [filter]" command
+ *  - update plugin loading/adding logic to current API
+ *
  * 1.0.2:
  *  - adjust to HHM 0.9.1
  *
@@ -20,12 +26,12 @@
  *    repositories, from raw URL and from pastebin
  */
 
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `sav/plugin-control`,
   author: `saviola`,
-  version: `1.0.2`,
+  version: `1.1.0`,
   dependencies: [
     `sav/help`,
     `sav/roles`,
@@ -49,7 +55,7 @@ let roles, help;
  * TODO documentation
  */
 function makeRawUrl(url) {
-  if (url.includes(`pastebin`) && !url.contains(`raw`)) {
+  if (url.includes(`pastebin`) && !url.includes(`raw`)) {
     return `https://pastebin.com/raw/${url.substr(url.lastIndexOf(`/`) + 1)}`;
   }
 
@@ -59,6 +65,42 @@ function makeRawUrl(url) {
 //
 // Event handlers
 //
+
+/**
+ * TODO documentation
+ */
+function onCommandInfoHandler() {
+  room.sendChat(`Running HHM version ${HHM.version.identifier}, built on `
+      + `${HHM.version.buildDate} from URL ${HHM.baseUrl}`);
+}
+
+/**
+ * TODO documentation
+ */
+function onCommandPluginListHandler(player, [filter = ``] = []) {
+  let manager = room.getPluginManager();
+  let loadedPluginIds = manager.getLoadedPluginIds();
+
+  let enabledPluginNames = [];
+  let disabledPluginNames = [];
+
+  loadedPluginIds = loadedPluginIds.map((id) => manager.getPluginById(id))
+      .filter((plugin) => plugin.getName().indexOf(filter) !== -1);
+  loadedPluginIds.forEach((plugin => {
+        (plugin.isEnabled() ? enabledPluginNames : disabledPluginNames)
+            .push(plugin.getName());
+      }));
+
+  let filterString = filter === `` ? `` : ` (for filter "${filter}")`;
+
+  room.sendChat(`Currently ${loadedPluginIds.length} plugins loaded${filterString}.`,
+      player.id);
+  room.sendChat(`Enabled plugins: ${enabledPluginNames.join(`, `)}.`, player.id);
+
+  if (disabledPluginNames.length > 0) {
+    room.sendChat(`Disabled plugins: ${disabledPluginNames.join(`, `)}.`, player.id);
+  }
+}
 
 /**
  * TODO documentation
@@ -85,19 +127,15 @@ async function onCommandPluginLoadHandler(player, arguments) {
     pluginName = arguments[0];
   }
 
+  const manager = room.getPluginManager();
   const pluginLoader = room.getPluginManager().getPluginLoader();
-  let pluginId = -1;
-
-  if (typeof pluginUrl !== `undefined`) {
-    pluginId = await pluginLoader.tryToLoadPluginByUrl(pluginUrl, pluginName);
-  } else if (typeof pluginName !== `undefined`) {
-    pluginId = await pluginLoader.tryToLoadPluginByName(pluginName)
-  }
+  let pluginId = await manager.addPlugin({ pluginName, pluginUrl});
 
   if (pluginId === -1) {
-    room.sendChat(`Unable to load plugin ${pluginName} from URL ${pluginUrl}.`,
-        playerId, HHM.log.level.ERROR);
+    room.sendChat(`Unable to load plugin from URL ${pluginUrl}.`,
+        playerId, { prefix: HHM.log.level.ERROR });
   } else {
+    pluginName = room.getPluginManager().getPluginName(pluginId);
     room.sendChat(`Plugin ${pluginName} successfully loaded and enabled`);
   }
 }
@@ -105,7 +143,7 @@ async function onCommandPluginLoadHandler(player, arguments) {
 /**
  * TODO documentation
  */
-function onCommandPluginDisableHandler(player, [pluginName]) {
+function onCommandPluginDisableHandler(player, [pluginName] = []) {
   const playerId = player.id;
 
   if (!roles.ensurePlayerRole(playerId, `host`, room, `plugin disable`)) {
@@ -120,23 +158,22 @@ function onCommandPluginDisableHandler(player, [pluginName]) {
 
   if (!room.hasPlugin(pluginName)) {
     return room.sendChat(`Invalid plugin name ${pluginName}`, playerId,
-        HHM.log.level.ERROR);
+        { prefix: HHM.log.level.ERROR });
   }
 
   if (!manager.disablePluginById(manager.getPluginId(pluginName))) {
     // TODO more error information
     return room.sendChat(`Could not disable plugin ${pluginName}`, playerId,
-        HHM.log.level.ERROR);
+        { prefix: HHM.log.level.ERROR });
   }
 
-  room.sendChat(`Plugin ${pluginName} disabled by player ` +
-      room.getPlayer(playerId).name);
+  room.sendChat(`Plugin ${pluginName} disabled by player ${player.name}`);
 }
 
 /**
  * TODO documentation
  */
-function onCommandPluginEnableHandler(player, [pluginName]) {
+function onCommandPluginEnableHandler(player, [pluginName] = []) {
   const playerId = player.id;
 
   if (!roles.ensurePlayerRole(playerId, `host`, room, `plugin enable`)) {
@@ -151,12 +188,13 @@ function onCommandPluginEnableHandler(player, [pluginName]) {
 
   if (!room.hasPlugin(pluginName)) {
     return room.sendChat(`Invalid plugin name ${pluginName}`, playerId,
-        HHM.log.level.ERROR);
+        { prefix: HHM.log.level.ERROR });
   }
 
   if (!manager.enablePluginById(manager.getPluginId(pluginName))) {
     // TODO more error information
-    return room.sendChat(`Could not enable plugin ${pluginName}`);
+    return room.sendChat(`Could not enable plugin ${pluginName}`, playerId,
+        { prefix: HHM.log.level.ERROR });
   }
 
   room.sendChat(`Plugin ${pluginName} enabled by player ` +
@@ -179,7 +217,9 @@ function onRoomLinkHandler() {
     }
   }
 
-  help.registerHelp(`plugin load`,
+  help.registerHelp(`plugin list`,
+      ` [FILTER], list loaded, enabled, and disabled plugins.`)
+      .registerHelp(`plugin load`,
       ` NAME URL, at least one of NAME or URL must be specified.`)
       .registerHelp(`plugin disable`, ` NAME`)
       .registerHelp(`plugin enable`, ` NAME`);
@@ -189,6 +229,8 @@ function onRoomLinkHandler() {
 // Exports
 //
 
+room.onCommand_info = onCommandInfoHandler;
+room.onCommand_plugin_list = onCommandPluginListHandler;
 room.onCommand_plugin_load = onCommandPluginLoadHandler;
 room.onCommand_plugin_disable = onCommandPluginDisableHandler;
 room.onCommand_plugin_enable = onCommandPluginEnableHandler;

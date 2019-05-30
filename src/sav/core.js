@@ -10,7 +10,7 @@
  *  - add sav/players to core
  */
 
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `sav/core`,

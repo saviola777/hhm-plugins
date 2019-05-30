@@ -6,6 +6,8 @@
  * changelog.
  */
 
+var room = HBInit();
+
 room.pluginSpec = {
   name: `aut/plugin-name`,  // aut here is optional and can be a shorthand,
   author: `author`,         // it is primarily used to avoid name clashes.
@@ -35,9 +37,9 @@ room.pluginSpec = {
  * as global variables.
  */
 
-const config = plugin.pluginSpec.config;
 const SOME_CONSTANT = `value you don't want to repeat everywhere`;
 
+const config = room.pluginSpec.config;
 let variableInitializedInOnRoomLinkHandler;
 
 //

@@ -53,6 +53,12 @@
  *
  * Changelog:
  *
+ * 1.4.2:
+ *  - do not hide commands by default
+ *  - fix a problem where messages containing multiple command prefixes and
+ *    nothing else would be interpreted as a command
+ *  - adjust to new sendChat API
+ *
  * 1.4.1:
  *  - adjust to HHM 0.9.1, player objects are now passed to event handlers
  *
@@ -75,15 +81,15 @@
  *  - change syntax from onCommandFoo# to onCommand#_foo
  */
 
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `sav/commands`,
   author: `saviola`,
-  version: `1.4.1`,
+  version: `1.4.2`,
   config: {
     commandPrefix: `!`,
-    hideCommands: 1,
+    hideCommands: 0,
     multiCommandPrefixHidesMessage: true,
   },
 };
@@ -171,6 +177,8 @@ function parseMessage(message, numArgsMax, commandPrefix, separator) {
     separator = ` `;
   }
 
+  message = removeMultiCommandPrefix(message, commandPrefix);
+
   if (!message.startsWith(commandPrefix) || message.length < 2) {
     return {
       command: ``,
@@ -179,8 +187,6 @@ function parseMessage(message, numArgsMax, commandPrefix, separator) {
       separator: separator,
     }
   }
-
-  message = removeMultiCommandPrefix(message, commandPrefix);
 
   const parts = message.split(separator, numArgsMax).map(arg => arg.trim())
   .filter(arg => arg.length > 0);
@@ -229,7 +235,7 @@ function onPlayerChatHandler(player, message, { returnValue }) {
 
     // Display message, but to player only
     if (!hideMessage && hideCommands === 1) {
-      room.sendChat(message, player.id, [`CMD`]);
+      room.sendChat(message, player.id, { prefix: [`CMD`] });
     }
 
     const eventReturnValue = triggerEvents(player.id, parsedMessage);

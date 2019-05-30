@@ -11,7 +11,41 @@
  *  - changing the team of a player
  *  - kicking a player
  *
+ * Additionally, the plugin extends the following native API functions:
+ *
+ *  - getPlayer(playerId, { offlinePlayers = false }): returns a player object
+ *    with the following additional properties: originalName, online. Also
+ *    supports retrieving player objects for players no longer in the room. auth
+ *    and conn properties are always available.
+ *  - getPlayerList({ offlinePlayers = false }): returns player objects including
+ *    offline players if the parameter is set to true.
+ *
+ * Other exported functions:
+ *
+ *  - buildPlayerPluginDataGetter: factory for player plugin data getters
+ *  - buildUserPluginDataGetter: factory for user plugin data getters
+ *  - getPlayerData: returns player data for a given plugin
+ *  - getUserById: returns a user object for a given auth, which contains the
+ *    properties seen, conns, ids and names for the plugin sav/players.
+ *  - getUserData: returns user data for a given plugin
+ *  - hasPlayer: returns whether the player with the given ID exists (they don't
+ *    have to be in the room though)
+ *
  * Changelog:
+ *
+ * 1.3.0:
+ *  - add documentation
+ *  - add ghost kick functionality which automatically kicks a player if
+ *    another player with the same auth and nickname joins
+ *  - remove feature where player IDs were added to the nickname
+ *  - change buildUserPluginDataGetter API to allow auth/playerID selection
+ *  - less pollution of the player object by moving the online property into
+ *    the plugin data
+ *  - export some useful functions like getPlayersByAuth, isUserOnline
+ *  - change getPlayerList and getPlayer API to expect destructuring argument
+ *  - add null check for player injection hook
+ *  - players with invalid auth are now immediately kicked and to not trigger
+ *    onPlayerJoin or onPlayerLeave
  *
  * 1.2.2:
  *  - adjust to HHM 0.9.1
@@ -37,20 +71,17 @@
  *  - allows access to users not in the room
  *  - fully backwards compatible
  *
- * TODO persistence
- * TODO documentation
  * TODO config documentation
  */
 
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `sav/players`,
   author: `saviola`,
-  version: `1.2.2`,
+  version: `1.3.0`,
   config: {
-    maxPlayerNameLength: 15,
-    addPlayerIdToNickname: true,
+    ghostKick: true,
   }
 };
 
@@ -102,12 +133,30 @@ function buildPlayerPluginDataGetter(pluginName) {
 
 /**
  * Convenience function to create a user data getter for the given
- * plugin.
+ * plugin or namespace.
  */
-function buildUserPluginDataGetter(pluginName) {
-  return (playerId) => {
-    return getUserData(idToAuth[playerId], pluginName);
-  };
+function buildUserPluginDataGetter(pluginName, byPlayerId = false) {
+  return byPlayerId ? (playerId) => {
+        return getUserData(idToAuth[playerId], pluginName);
+      } :
+      (auth) => {
+        return getUserData(auth, pluginName);
+      };
+}
+
+/**
+ * Checks if there are other players with the same name and auth already in the
+ * room and kicks them.
+ */
+function checkGhosts(playerId) {
+  const playerName = room.getPlayer(playerId).originalName;
+
+  room.getPlayerList()
+      .filter((p) => p.id < playerId && p.originalName === playerName)
+      .forEach((p) => {
+        room.setPlayerTeam(playerId, p.team);
+        room.kickPlayer(p.id, `Ghost kick`)
+  });
 }
 
 /**
@@ -115,14 +164,16 @@ function buildUserPluginDataGetter(pluginName) {
  */
 function createInitialPlayerObject(player) {
   return {
+    'auth': player.auth,
     'admin': player.admin,
+    'conn': player.conn,
     'id': player.id,
-    'name': createPlayerName(player),
-    'online': true,
-    'originalName': player.name,
     'team': player.team,
 
     '_pluginData': {
+      'sav/players': {
+        'online': true,
+      }
     },
   };
 }
@@ -146,21 +197,6 @@ function createInitialUserdataObject() {
 /**
  * TODO documentation
  */
-function createPlayerName(player) {
-  const nameLength = room.getConfig().maxPlayerNameLength;
-  let playerName = player.name;
-  if (room.getConfig().maxPlayerNameLength > 0) {
-    playerName = playerName.length <= nameLength ? playerName
-        : playerName.substr(0, nameLength - 1) + '…';
-  }
-
-  if (room.getConfig().addPlayerIdToNickname) {
-    playerName += `#${player.id}`;
-  }
-
-  return playerName;
-}
-
 function getData(object, pluginName) {
   if (object === undefined) {
     return undefined;
@@ -178,14 +214,12 @@ function getData(object, pluginName) {
  * TODO documentation
  */
 // TODO handle non-existent IDs
-function getPlayer({ previousFunction }, playerId,
-                   offlinePlayers = false) {
-
+function getPlayer({ previousFunction }, playerId, { offlinePlayers = false } = {}) {
   let nativePlayer = previousFunction(playerId);
   const player = getPlayerById(playerId);
 
   return player === undefined || ((nativePlayer === null
-      || !player.online) && !offlinePlayers) ? null :
+      || !isPlayerOnline(playerId)) && !offlinePlayers) ? null :
       $.extend(nativePlayer || {}, player);
 }
 
@@ -194,6 +228,14 @@ function getPlayer({ previousFunction }, playerId,
  */
 function getPlayerById(playerId, defaultValue = undefined) {
   return playersById[playerId] || defaultValue;
+}
+
+/**
+ * TODO documentation
+ */
+function getPlayersByAuth(auth, { offlinePlayers = false } = {}) {
+  return playersById.filter((p) => p.auth === auth)
+      .map((p) => room.getPlayer(p.id, { offlinePlayers }));
 }
 
 /**
@@ -215,7 +257,7 @@ function getUserByAuth(auth) {
 /**
  * TODO documentation
  */
-function getUserById(playerId) {
+function getUserByPlayerId(playerId) {
   return usersByAuth[idToAuth[playerId]];
 }
 
@@ -238,13 +280,27 @@ function hasPlayer(playerId) {
 /**
  * TODO documentation
  */
-function getPlayerList({ previousFunction }, offlinePlayers = false) {
+function isPlayerOnline(playerId) {
+  return getPlayerData(playerId).online;
+}
 
+/**
+ * TODO documentation
+ */
+function isUserOnline(auth) {
+  return Array.from(getUserData(auth).ids.values())
+      .filter((id) => isPlayerOnline(id)).length > 0;
+}
+
+/**
+ * TODO documentation
+ */
+function getPlayerList({ previousFunction }, { offlinePlayers = false } = {}) {
   const playersNative = previousFunction();
 
   return offlinePlayers ?
       Object.getOwnPropertyNames(idToAuth).map((id) =>
-          room.getPlayer(id, true))
+          room.getPlayer(id, { offlinePlayers: true }))
       : playersNative.map((p) => room.getPlayer(p.id));
 }
 
@@ -253,7 +309,9 @@ function getPlayerList({ previousFunction }, offlinePlayers = false) {
  */
 function kickPlayer({ previousFunction}, playerId, reason,
                     ban) {
-  onPlayerLeaveHandler(room.getPlayer(playerId));
+  if (hasPlayer(playerId)) {
+    onPlayerLeaveHandler(room.getPlayer(playerId, { offlinePlayers: true }));
+  }
 
   return previousFunction(playerId, reason, ban);
 }
@@ -290,8 +348,9 @@ function createPlayerInjectionPreEventHandlerHook(...argumentIndices) {
   return ({}, ...args) => {
     for (let index of argumentIndices) {
       // Sanity check
-      if (typeof args[index] === `object` && args[index].hasOwnProperty(`id`)) {
-        args[index] = room.getPlayer(args[index].id, true);
+      if (typeof args[index] === `object` && args[index] !== null
+          && args[index].hasOwnProperty(`id`) && hasPlayer(args[index].id)) {
+        args[index] = room.getPlayer(args[index].id, { offlinePlayers: true });
       }
     }
 
@@ -315,7 +374,14 @@ function onPersistHandler() {
  * TODO documentation
  */
 function onPlayerJoinEventStateValidator({}, player) {
-  return getPlayerById(player.id, {}).online === true;
+  return hasPlayer(player.id) && isPlayerOnline(player.id);
+}
+
+/**
+ * TODO documentation
+ */
+function onPlayerLeaveEventStateValidator({}, player) {
+  return hasPlayer(player.id);
 }
 
 /**
@@ -323,9 +389,10 @@ function onPlayerJoinEventStateValidator({}, player) {
  */
 function onPlayerJoinPreEventHandlerHook({}, player) {
   if (player.auth === null) {
-    room.kickPlayer(player.id, `Authentication failed, please use a Web `
-        + `Crypto API compatible browser: `
-        + `https://developer.mozilla.org/en-US/docs/Web/API/Web_Crypto_API#Browser_compatibility`, false);
+    room.kickPlayer(player.id,
+        `Authentication failed, please use a Web `
+        + `Crypto API compatible browser and / or clear your LocalStorage`,
+        false);
 
     return false;
   }
@@ -342,9 +409,8 @@ function onPlayerJoinPreEventHandlerHook({}, player) {
   const userData = getUserData(player.auth);
   userData.ids.add(player.id);
   userData.conns.add(player.conn);
-  userData.names.add(player.originalName);
+  userData.names.add(player.name);
   userData.seen = new Date();
-  userData.online = true;
 
   if (playersByConn[player.conn] === undefined) {
     playersByConn[player.conn] = new Set();
@@ -354,22 +420,26 @@ function onPlayerJoinPreEventHandlerHook({}, player) {
   playersByConn[player.conn].add(player.id);
 
   idToAuth[player.id] = player.auth;
+
+  if (room.getConfig(`ghostKick`) === true) {
+    checkGhosts(player.id);
+  }
 }
 
 /**
  * TODO documentation
  */
-function onPlayerLeaveHandler(playerNative) {
-  const player = getPlayerById(playerNative.id);
-
-  if (player === undefined) {
-    return;
+function onPlayerLeaveHandler(player) {
+  if (player === null) {
+    return room.log(`Player object is null in onPlayerLeaveHandler, this should `
+        + `not have happened`, HHM.log.level.WARN);
   }
 
-  const userData = getUserData(idToAuth[playerNative.id]);
+  const userData = getUserData(idToAuth[player.id]);
   userData.seen = new Date();
-  userData.online = false;
-  player.online = false;
+
+  const playerData = getPlayerData(player.id);
+  playerData.online = false;
 }
 
 function onPlayerAdminChangePreEventHandlerHook({}, player) {
@@ -411,6 +481,8 @@ function onRoomLinkHandler() {
 
   room.addEventStateValidator(`onPlayerJoin`,
       onPlayerJoinEventStateValidator);
+  room.addEventStateValidator(`onPlayerLeave`,
+      onPlayerLeaveEventStateValidator);
 
   room.addPreEventHandlerHook(`onPlayerAdminChange`,
       onPlayerAdminChangePreEventHandlerHook);
@@ -436,6 +508,8 @@ function onRoomLinkHandler() {
   // TODO solve cleaner
   // TODO handle players already in the room
   const hostPlayer = getPlayerNative(0);
+  hostPlayer.auth = `HOST_AUTH`;
+  hostPlayer.conn = `HOST_CONN`;
   playersById[0] = createInitialPlayerObject(hostPlayer);
   usersByAuth[`HOST_AUTH`] = createInitialUserdataObject();
   const userData = getUserData(`HOST_AUTH`);
@@ -443,7 +517,6 @@ function onRoomLinkHandler() {
   userData.conns.add(`HOST_CONN`);
   userData.names.add(hostPlayer.name); // TODO make dynamic
   userData.seen = new Date();
-  userData.online = true;
   playersByConn[`HOST_CONN`] = new Set().add(`HOST_AUTH`);
   idToAuth[0] = `HOST_AUTH`;
 }
@@ -455,9 +528,13 @@ function onRoomLinkHandler() {
 room.buildPlayerPluginDataGetter = buildPlayerPluginDataGetter;
 room.buildUserPluginDataGetter = buildUserPluginDataGetter;
 room.getPlayerData = getPlayerData;
-room.getUser = getUserById;
+room.getPlayersByAuth = getPlayersByAuth;
+room.getUserByPlayerId = getUserByPlayerId;
+room.getUserByAuth = getUserByAuth;
 room.getUserData = getUserData;
 room.hasPlayer = hasPlayer;
+room.isPlayerOnline = isPlayerOnline;
+room.isUserOnline = isUserOnline;
 
 room.onPersist = onPersistHandler;
 room.onPlayerLeave = onPlayerLeaveHandler;

@@ -15,7 +15,7 @@
  *
  * Insert any number for XX, it can have more than two digits. There are no
  * singular version of the units, so always use Seconds, Minutes or
- * Hours (uppercase).
+ * Hours (first letter uppercase).
  *
  * You can add "Once" at the end of each of these to add a
  * one-time cron job. It will be executed once and then deleted.
@@ -37,6 +37,10 @@
  *
  * Changelog:
  *
+ * 1.2.0:
+ *  - fix issue where new cron jobs would not be picked up at runtime until a
+ *    property was set
+ *
  * 1.1.2:
  *  - adjust to HHM 0.9.1
  *
@@ -55,12 +59,12 @@
  *  TODO add support for removing cronjobs
  */
 
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `sav/cron`,
   author: `saviola`,
-  version: `1.1.2`,
+  version: `1.2.0`,
   config: {
     gameTicks: 60,
   }
@@ -214,7 +218,7 @@ function onGameTickHandler() {
   globalTickCount = Math.min(globalTickCount + 1, gameTicks) % gameTicks;
 }
 
-function onHhmPropertySetHandler() {
+function onHhmEventHandlerSetHandler() {
   setupCronJobs();
 }
 
@@ -231,4 +235,4 @@ function onRoomLinkHandler() {
 
 room.onGameTick = onGameTickHandler;
 room.onRoomLink = onRoomLinkHandler;
-room.onHhm_propertySet = onHhmPropertySetHandler;
+room.onHhm_eventHandlerSet = onHhmEventHandlerSetHandler;

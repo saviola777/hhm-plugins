@@ -9,7 +9,7 @@
  *  - provides getPlayerListByTeam() function for convenient access to
  *    team-based player lists
  */
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `sav/players-helper`,

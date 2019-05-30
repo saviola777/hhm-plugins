@@ -36,7 +36,7 @@
  *  TODO Display help when calling command without parameters
  *  TODO Display sub-commands when calling help for main command without help
  */
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `sav/help`,

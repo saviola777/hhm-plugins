@@ -3,10 +3,10 @@
  *
  * Provides four types of events to handle added / removed roles for players:
  *
- * - onPlayerRole(player, role, added)
- * - onPlayerRole_role(player, added)
- * - onPlayerRoleAdded/onPlayerRoleRemoved(player, role)
- * - onPlayerRoleAdded/onPlayerRoleRemoved_role(player)
+ *  - onPlayerRole(player, role, added)
+ *  - onPlayerRole_role(player, added)
+ *  - onPlayerRoleAdded/onPlayerRoleRemoved(player, role)
+ *  - onPlayerRoleAdded/onPlayerRoleRemoved_role(player)
  *
  * Players leaving does not trigger any authentication events.
  *
@@ -23,7 +23,36 @@
  *
  * Roles with empty passwords cannot be acquired using !auth.
  *
+ * Exported functions:
+ *
+ *  - addOrUpdateRole(role, password): adds or updates a role
+ *  - addPlayerRole(playerId, role, persistent = false): adds a role to the given
+ *    player, making it persistent across room restarts if persistent is set to
+ *    true
+ *  - ensurePlayerRole(playerId, role, plugin, feature, message): This checks
+ *    if the player has the given role, returns true if they do, false if they
+ *    don't, and sends a  customizable PM to the player if false is returned
+ *  - getPlayerRoles(playerId): Returns an array of roles for the given player
+ *  - getRole(roleName, { offlinePlayers = false}): Returns information for the
+ *    given role (name, password, players in the room having the role)
+ *  - getRoles({ offlinePlayers = false }): Like `getRole`, but for all roles
+ *  - hasPlayerRole(playerId, role): Returns whether the given player has the
+ *    given role
+ *  - hasRole(role): Returns whether the given role exists
+ *  - removePlayerRole(playerId, role): Removes the given role from the given
+ *    player
+ *  - removeRole(role): Removes the given role completely
+ *  - setPlayerRole(playerId, role, state = true, persistent = false): Add or
+ *    remove given role for the given player
+ *
  * Changelog:
+ *
+ * 1.2.0:
+ *  - rename `getRoles` to `getPlayerRoles`
+ *  - add several exported functions for better access to role information
+ *  - do not give admin role to every admin, only to those explicitly
+ *    authenticated for the role
+ *  - rename ensurePlayerRole to ensurePlayerRoles and accept array of roles
  *
  * 1.1.1:
  *  - adjust to HHM 0.9.1
@@ -37,12 +66,12 @@
  *  - initial implementation of a basic role system
  */
 
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `sav/roles`,
   author: `saviola`,
-  version: `1.1.1`,
+  version: `1.2.0`,
   dependencies: [
     `sav/commands`,
     `sav/help`,
@@ -104,24 +133,41 @@ function addPlayerRole(playerId, role, persistent = false) {
   return returnValue;
 }
 
+function addUserRole(auth, role) {
+  const userRoles = getUserAuth(playerId).roles
+}
+
 /**
- * TODO documentation
+ * Checks whether the given player has at least one of the given roles and
+ * prints and error message to chat (only for the issuing user) if not.
+ *
+ * The message will be
+ *
+ *  "${message} for ${feature} of plugin ${pluginName}. It requires one of the
+ *  following roles: ${roles}"
+ *
+ *  If ${message} is undefined, it will default to "Access denied".
+ *  If ${feature} is undefined, it will only print the plugin name.
+ *
  */
-function ensurePlayerRole(playerId, role, plugin, feature, message) {
-  if (room.hasPlayerRole(playerId, role)) {
+function ensurePlayerRoles(playerId, roles, plugin, feature,
+                           message = `Access denied`) {
+  roles = roles.constructor !== Array ? [roles] : roles;
+  if (roles.some((role) => room.hasPlayerRole(playerId, role))) {
     return true;
   }
 
-  if (message === undefined) {
-    message = `Access denied`;
+  const rolesString = roles.join(', ');
+
+  let pluginFeature = `plugin ${plugin._name}`;
+
+  if (feature !== undefined) {
+    pluginFeature = `${feature} of ${pluginFeature}`;
   }
 
-  const pluginFeature = feature === undefined ? plugin._name
-      : `${feature} of plugin ${plugin._name}`;
-
-  room.sendChat(`${message} for "${pluginFeature}". Player ` +
-      `${room.getPlayer(playerId).name} does not have role ${role}`,
-      playerId, HHM.log.level.ERROR);
+  room.sendChat(`${message} for ${pluginFeature}. ` +
+      `It requires one of the following roles: ${rolesString}`,
+      playerId, { prefix: HHM.log.level.ERROR });
 
   return false;
 }
@@ -129,10 +175,46 @@ function ensurePlayerRole(playerId, role, plugin, feature, message) {
 /**
  * Returns an array of roles for the given player.
  */
-function getRoles(playerId) {
+function getPlayerRoles(playerId) {
   provideAuthenticationInfo(playerId);
 
   return [...getPlayerAuth(playerId).roles];
+}
+
+/**
+ * Returns role information.
+ *
+ * Returns an object which contains
+ *
+ *  - roleName: name of the role
+ *  - players: array of player objects currently in the room who have the role
+ *  - password: role password
+ *
+ * Note that this function does not care if the function exists it will still
+ * return a valid result (no players, no password).
+ */
+function getRole(roleName, { offlinePlayers = false } = {}) {
+  const roleExists = hasRole(roleName);
+  return {
+    roleName: roleName,
+    players: roleExists ? room.getPlayerList({ offlinePlayers })
+      .filter((p) => hasPlayerRole(p.id)) : [],
+    password: roleExists ? getRoles()[roleName] : ``,
+  };
+}
+
+/**
+ * Returns role information on all roles.
+ *
+ * @see getRole
+ */
+function getRoles({ offlinePlayers = false } = {}) {
+  let roles = {};
+
+  Object.getOwnPropertyNames(room.getConfig(`roles`)).forEach((roleName) =>
+      roles[roleName] = getRole(roleName, { offlinePlayers }));
+
+  return roles;
 }
 
 /**
@@ -208,11 +290,7 @@ function setPlayerRole(playerId, role, state = true, persistent = false) {
 /**
  * TODO documentation
  */
-function triggerAuthenticationEvents(playerId, role, added) {
-  if (added === undefined) {
-    added = true;
-  }
-
+function triggerAuthenticationEvents(playerId, role, added = true) {
   const addedString = added ? `Added` : `Removed`;
 
   room.triggerEvent(`onPlayerRole`, playerId, role, added);
@@ -265,19 +343,17 @@ function onCommandAuthHandler(player, arguments, argumentString, message) {
  * TODO documentation
  */
 function onRoomLinkHandler() {
+  if (typeof room.getConfig(`roles`) !== `object`) {
+    room.log(`Invalid configuration: roles must be object`, HHM.log.level.ERROR);
+    room.setConfig(`roles`, {});
+  }
+
   getPlayerAuth = room.getPlugin(`sav/players`)
       .buildPlayerPluginDataGetter(`sav/roles`);
   getUserAuth = room.getPlugin(`sav/players`)
-      .buildUserPluginDataGetter(`sav/roles`);
+      .buildUserPluginDataGetter(`sav/roles`, true);
 
   room.getPlugin(`sav/help`).registerHelp(`auth`, ` ROLE PASSWORD`);
-}
-
-/**
- * TODO documentation
- */
-function onPlayerAdminChangeHandler(player) {
-  room.setPlayerRole(player.id, `admin`, player.admin);
 }
 
 /**
@@ -307,9 +383,11 @@ function onPlayerRoleAdminHandler(playerId, added) {
 
 room.addPlayerRole = addPlayerRole;
 room.addOrUpdateRole = addOrUpdateRole;
-room.getRoles = getRoles;
+room.getPlayerRoles = getPlayerRoles;
 room.hasPlayerRole = hasPlayerRole;
-room.ensurePlayerRole = ensurePlayerRole;
+room.ensurePlayerRoles = ensurePlayerRoles;
+room.getRole = getRole;
+room.getRoles = getRoles;
 room.hasRole = hasRole;
 room.removePlayerRole = removePlayerRole;
 room.removeRole = removeRole;
@@ -317,6 +395,5 @@ room.setPlayerRole = setPlayerRole;
 
 room.onRoomLink = onRoomLinkHandler;
 room.onPlayerRole_admin = room.onPlayerRole_host = onPlayerRoleAdminHandler;
-room.onPlayerAdminChange = onPlayerAdminChangeHandler;
 room.onCommand_auth = onCommandAuthHandler;
 room.onPlayerJoin = onPlayerJoinHandler;

@@ -3,17 +3,22 @@
  *
  * Changelog:
  *
+ * 1.1.0:
+ *  - add onBeforePersist event to let plugins prepare for persistence
+ *  - export persistAllPluginData
+ *  - make the exported persistPluginData also trigger the above-mentioned event
+ *
  * 1.0.0:
  *  - initial version
  *
  */
 
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `hhm/persistence`,
   author: `saviola`,
-  version: `1.0.0`,
+  version: `1.1.0`,
   dependencies: [
     `hhm/persistence`, // Can't be disabled
   ],
@@ -37,6 +42,8 @@ let interval, storage;
  * Persists the data of all enabled plugins
  */
 async function persistAllPluginData() {
+  room.triggerEvent(`onBeforePersist`);
+
   await room.getPluginManager().getEnabledPluginIds()
       .map((id) => room.getPluginManager().getPluginById(id))
       .forEach(async (plugin) => await persistPluginData(plugin));
@@ -54,6 +61,12 @@ async function persistPluginData(plugin) {
   };
 
   await storage.setItem(plugin._name, persistedData);
+}
+
+async function persistPluginDataWrapper(plugin) {
+  room.triggerEvent(`onBeforePersist`);
+
+  await persistPluginData(plugin);
 }
 
 //
@@ -95,6 +108,9 @@ async function onHhmPluginDisabledHandler({ plugin }) {
 //
 // Exports
 //
+
+room.persistPluginData = persistPluginDataWrapper;
+room.persistAllPluginData = persistAllPluginData;
 
 room.onRoomLink = onRoomLinkHandler;
 

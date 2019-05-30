@@ -10,6 +10,9 @@
  *
  * Changelog:
  *
+ * 1.2.1:
+ *  - if pluginSpec is no object, it is used as the plugin name
+ *
  * 1.2.0:
  *  - move non-plugin event handlers of the HHM to this plugin
  *
@@ -22,12 +25,12 @@
  *
  */
 
-const room = HBInit();
+var room = HBInit();
 
 room.pluginSpec = {
   name: `hhm/core`,
   author: `saviola`,
-  version: `1.2.0`,
+  version: `1.2.1`,
   dependencies: [
     `hhm/core` // Can't be disabled
   ],
@@ -53,6 +56,13 @@ function onHhmPluginStateChangeHandler() {
 function onHhmPropertySetHandler({ plugin, propertyName, propertyValue }) {
   // Register plugin name after setting the plugin specification
   if (propertyName === `pluginSpec`) {
+
+    // If pluginSpec is no object, use the value as plugin name
+    // TODO document behavior
+    if (typeof propertyValue !== `object`) {
+      plugin.pluginSpec = { name: propertyValue };
+      return true;
+    }
 
     if (propertyValue.hasOwnProperty(`name`)
         && propertyValue.name !== plugin._name) {
