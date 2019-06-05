@@ -14,7 +14,7 @@
  * Additionally, the plugin extends the following native API functions:
  *
  *  - getPlayer(playerId, { offlinePlayers = false }): returns a player object
- *    with the following additional properties: originalName, online. Also
+ *    with the additional property _pluginData. Also
  *    supports retrieving player objects for players no longer in the room. auth
  *    and conn properties are always available.
  *  - getPlayerList({ offlinePlayers = false }): returns player objects including
@@ -33,6 +33,12 @@
  *
  * Changelog:
  *
+ * 1.3.1:
+ *  - fix buggy ghost kick which still used originalName property
+ *  - move onPlayerLeave logic to pre-event handler hook
+ *  - no longer extend kick function which was unreliable if the API tries to
+ *    kick the host
+ *
  * 1.3.0:
  *  - add documentation
  *  - add ghost kick functionality which automatically kicks a player if
@@ -44,7 +50,7 @@
  *  - export some useful functions like getPlayersByAuth, isUserOnline
  *  - change getPlayerList and getPlayer API to expect destructuring argument
  *  - add null check for player injection hook
- *  - players with invalid auth are now immediately kicked and to not trigger
+ *  - players with invalid auth are now immediately kicked and do not trigger
  *    onPlayerJoin or onPlayerLeave
  *
  * 1.2.2:
@@ -79,7 +85,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/players`,
   author: `saviola`,
-  version: `1.3.0`,
+  version: `1.3.1`,
   config: {
     ghostKick: true,
   }
@@ -149,10 +155,10 @@ function buildUserPluginDataGetter(pluginName, byPlayerId = false) {
  * room and kicks them.
  */
 function checkGhosts(playerId) {
-  const playerName = room.getPlayer(playerId).originalName;
+  const playerName = room.getPlayer(playerId).name;
 
   room.getPlayerList()
-      .filter((p) => p.id < playerId && p.originalName === playerName)
+      .filter((p) => p.id < playerId && p.name === playerName)
       .forEach((p) => {
         room.setPlayerTeam(playerId, p.team);
         room.kickPlayer(p.id, `Ghost kick`)
@@ -307,18 +313,6 @@ function getPlayerList({ previousFunction }, { offlinePlayers = false } = {}) {
 /**
  * TODO documentation
  */
-function kickPlayer({ previousFunction}, playerId, reason,
-                    ban) {
-  if (hasPlayer(playerId)) {
-    onPlayerLeaveHandler(room.getPlayer(playerId, { offlinePlayers: true }));
-  }
-
-  return previousFunction(playerId, reason, ban);
-}
-
-/**
- * TODO documentation
- */
 function setPlayerAdmin({ previousFunction }, playerId, admin) {
   getPlayerById(playerId, {}).admin = admin;
 
@@ -429,10 +423,11 @@ function onPlayerJoinPreEventHandlerHook({}, player) {
 /**
  * TODO documentation
  */
-function onPlayerLeaveHandler(player) {
+function onPlayerLeavePreEventHandlerHook({}, player) {
   if (player === null) {
-    return room.log(`Player object is null in onPlayerLeaveHandler, this should `
+    room.log(`Player object is null in onPlayerLeaveHandler, this should `
         + `not have happened`, HHM.log.level.WARN);
+    return false;
   }
 
   const userData = getUserData(idToAuth[player.id]);
@@ -475,7 +470,6 @@ function onRoomLinkHandler() {
   getPlayerNative = room.getPlayer;
   room.extend(`getPlayer`, getPlayer);
   room.extend(`getPlayerList`, getPlayerList);
-  room.extend(`kickPlayer`, kickPlayer);
   room.extend(`setPlayerAdmin`, setPlayerAdmin);
   room.extend(`setPlayerTeam`, setPlayerTeam);
 
@@ -488,6 +482,8 @@ function onRoomLinkHandler() {
       onPlayerAdminChangePreEventHandlerHook);
   room.addPreEventHandlerHook(`onPlayerJoin`,
       onPlayerJoinPreEventHandlerHook);
+  room.addPreEventHandlerHook(`onPlayerLeave`,
+      onPlayerLeavePreEventHandlerHook);
   room.addPreEventHandlerHook(`onPlayerTeamChange`,
       onPlayerTeamChangePreEventHandlerHook);
 
@@ -511,14 +507,14 @@ function onRoomLinkHandler() {
   hostPlayer.auth = `HOST_AUTH`;
   hostPlayer.conn = `HOST_CONN`;
   playersById[0] = createInitialPlayerObject(hostPlayer);
-  usersByAuth[`HOST_AUTH`] = createInitialUserdataObject();
-  const userData = getUserData(`HOST_AUTH`);
+  usersByAuth[hostPlayer.auth] = createInitialUserdataObject();
+  const userData = getUserData(hostPlayer.auth);
   userData.ids.add(0);
-  userData.conns.add(`HOST_CONN`);
+  userData.conns.add(hostPlayer.conn);
   userData.names.add(hostPlayer.name); // TODO make dynamic
   userData.seen = new Date();
-  playersByConn[`HOST_CONN`] = new Set().add(`HOST_AUTH`);
-  idToAuth[0] = `HOST_AUTH`;
+  playersByConn[hostPlayer.conn] = new Set().add(hostPlayer.auth);
+  idToAuth[0] = hostPlayer.auth;
 }
 
 //
@@ -537,6 +533,5 @@ room.isPlayerOnline = isPlayerOnline;
 room.isUserOnline = isUserOnline;
 
 room.onPersist = onPersistHandler;
-room.onPlayerLeave = onPlayerLeaveHandler;
 room.onRestore = onRestoreHandler;
 room.onRoomLink = onRoomLinkHandler;

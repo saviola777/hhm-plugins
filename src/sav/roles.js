@@ -47,6 +47,10 @@
  *
  * Changelog:
  *
+ * 1.2.1:
+ *  - rename `persistent` to `userRole`
+ *  - add `userRole` parameter to most of the functions and event handlers
+ *
  * 1.2.0:
  *  - rename `getRoles` to `getPlayerRoles`
  *  - add several exported functions for better access to role information
@@ -71,7 +75,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/roles`,
   author: `saviola`,
-  version: `1.2.0`,
+  version: `1.2.1`,
   dependencies: [
     `sav/commands`,
     `sav/help`,
@@ -113,7 +117,7 @@ function addOrUpdateRole(role, password) {
 /**
  * Add the given role to the given player.
  */
-function addPlayerRole(playerId, role, persistent = false) {
+function addPlayerRole(playerId, role, userRole = false) {
   provideAuthenticationInfo(playerId);
 
   const playerRoles = getPlayerAuth(playerId).roles,
@@ -121,13 +125,13 @@ function addPlayerRole(playerId, role, persistent = false) {
 
   const returnValue = !playerRoles.has(role);
 
-  if (persistent && !userRoles.has(role)) {
+  if (userRole && !userRoles.has(role)) {
     userRoles.add(role);
   }
 
   if (returnValue) {
     playerRoles.add(role);
-    triggerAuthenticationEvents(playerId, role);
+    triggerAuthenticationEvents(playerId, role, userRole);
   }
 
   return returnValue;
@@ -144,16 +148,16 @@ function addUserRole(auth, role) {
  * The message will be
  *
  *  "${message} for ${feature} of plugin ${pluginName}. It requires one of the
- *  following roles: ${roles}"
+ *  following user/player roles: ${roles}"
  *
  *  If ${message} is undefined, it will default to "Access denied".
  *  If ${feature} is undefined, it will only print the plugin name.
  *
  */
-function ensurePlayerRoles(playerId, roles, plugin, feature,
-                           message = `Access denied`) {
+function ensurePlayerRoles(playerId, roles, plugin, { userRole = false, feature,
+                           message = `Access denied` } = {}) {
   roles = roles.constructor !== Array ? [roles] : roles;
-  if (roles.some((role) => room.hasPlayerRole(playerId, role))) {
+  if (roles.some((role) => room.hasPlayerRole(playerId, role, userRole))) {
     return true;
   }
 
@@ -166,8 +170,8 @@ function ensurePlayerRoles(playerId, roles, plugin, feature,
   }
 
   room.sendChat(`${message} for ${pluginFeature}. ` +
-      `It requires one of the following roles: ${rolesString}`,
-      playerId, { prefix: HHM.log.level.ERROR });
+      `It requires one of the following ${userRole ? `user` : `player`} roles: `
+          + rolesString, playerId, { prefix: HHM.log.level.ERROR });
 
   return false;
 }
@@ -218,12 +222,13 @@ function getRoles({ offlinePlayers = false } = {}) {
 }
 
 /**
- * Returns whether the given player has the given role.
+ * Returns whether the given player has the given (user) role.
  */
-function hasPlayerRole(playerId, role) {
+function hasPlayerRole(playerId, role, userRole = false) {
   provideAuthenticationInfo(playerId);
 
-  return getPlayerAuth(playerId).roles.has(role);
+  return userRole ? getUserAuth(playerId).roles.has(role)
+      : getPlayerAuth(playerId).roles.has(role);
 }
 
 /**
@@ -252,10 +257,10 @@ function removePlayerRole(playerId, role) {
   provideAuthenticationInfo(playerId);
 
   const returnValue = getPlayerAuth(playerId).roles.delete(role);
-  getUserAuth(playerId).roles.delete(role);
+  const userRole = getUserAuth(playerId).roles.delete(role);
 
   if (returnValue) {
-    triggerAuthenticationEvents(playerId, role, false);
+    triggerAuthenticationEvents(playerId, role, userRole, false);
   }
 
   return returnValue;
@@ -282,21 +287,22 @@ function removeRole(role) {
 /**
  * Convenience function for adding / removing a role based on a boolean state.
  */
-function setPlayerRole(playerId, role, state = true, persistent = false) {
-  state ? room.addPlayerRole(playerId, role, persistent)
+function setPlayerRole(playerId, role, state = true, userRole = false) {
+  state ? room.addPlayerRole(playerId, role, userRole)
       : room.removePlayerRole(playerId, role);
 }
 
 /**
  * TODO documentation
  */
-function triggerAuthenticationEvents(playerId, role, added = true) {
+function triggerAuthenticationEvents(playerId, role, userRole = false,
+                                     added = true) {
   const addedString = added ? `Added` : `Removed`;
 
-  room.triggerEvent(`onPlayerRole`, playerId, role, added);
-  room.triggerEvent(`onPlayerRole_${role}`, playerId, added);
-  room.triggerEvent(`onPlayerRole${addedString}`, playerId, role);
-  room.triggerEvent(`onPlayerRole${addedString}_${role}`, playerId);
+  room.triggerEvent(`onPlayerRole`, playerId, role, added, userRole);
+  room.triggerEvent(`onPlayerRole_${role}`, playerId, added, userRole);
+  room.triggerEvent(`onPlayerRole${addedString}`, playerId, role, userRole);
+  room.triggerEvent(`onPlayerRole${addedString}_${role}`, playerId, userRole);
 }
 
 //
