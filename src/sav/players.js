@@ -175,6 +175,7 @@ function createInitialPlayerObject(player) {
     'admin': player.admin,
     'conn': player.conn,
     'id': player.id,
+    'name': player.name,
     'team': player.team,
 
     '_pluginData': {
@@ -227,7 +228,7 @@ function getPlayer({ previousFunction }, playerId, { offlinePlayers = false } = 
 
   return player === undefined || ((nativePlayer === null
       || !isPlayerOnline(playerId)) && !offlinePlayers) ? null :
-      $.extend(nativePlayer || {}, player);
+      $.extend({ position: null }, nativePlayer || {}, player);
 }
 
 /**
