@@ -38,6 +38,7 @@
  *  - move onPlayerLeave logic to pre-event handler hook
  *  - no longer extend kick function which was unreliable if the API tries to
  *    kick the host
+ *  - fix null elements in getPlayerList()
  *
  * 1.3.0:
  *  - add documentation
@@ -307,7 +308,8 @@ function getPlayerList({ previousFunction }, { offlinePlayers = false } = {}) {
   return offlinePlayers ?
       Object.getOwnPropertyNames(idToAuth).map((id) =>
           room.getPlayer(id, { offlinePlayers: true }))
-      : playersNative.map((p) => room.getPlayer(p.id));
+      : playersNative.map((p) => room.getPlayer(p.id))
+        .filter((p) => p !== null);
 }
 
 /**
