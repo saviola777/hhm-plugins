@@ -9,6 +9,9 @@
  *
  * Changelog:
  *
+ * 1.1.1:
+ *  - adjust to new `sav/help` API
+ *
  * 1.1.0:
  *  - fix wrong call to string.contains
  *  - add "!info" command
@@ -31,7 +34,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/plugin-control`,
   author: `saviola`,
-  version: `1.1.0`,
+  version: `1.1.1`,
   dependencies: [
     `sav/help`,
     `sav/roles`,
@@ -220,9 +223,9 @@ function onRoomLinkHandler() {
   help.registerHelp(`plugin list`,
       ` [FILTER], list loaded, enabled, and disabled plugins.`)
       .registerHelp(`plugin load`,
-      ` NAME URL, at least one of NAME or URL must be specified.`)
-      .registerHelp(`plugin disable`, ` NAME`)
-      .registerHelp(`plugin enable`, ` NAME`);
+      ` NAME URL, at least one of NAME or URL must be specified.`, { roles: [`admin`] })
+      .registerHelp(`plugin disable`, ` NAME`, { roles: [`admin`] })
+      .registerHelp(`plugin enable`, ` NAME`, { roles: [`admin`] });
 }
 
 //

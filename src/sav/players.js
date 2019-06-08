@@ -39,6 +39,7 @@
  *  - no longer extend kick function which was unreliable if the API tries to
  *    kick the host
  *  - fix null elements in getPlayerList()
+ *  - add error messages in case of invalid parameters for the data getters
  *
  * 1.3.0:
  *  - add documentation
@@ -134,6 +135,7 @@ let getPlayerNative;
  */
 function buildPlayerPluginDataGetter(pluginName) {
   return (playerId) => {
+    if (playerId === undefined) throw new Error(`playerId unexpectedly undefined`);
     return getPlayerData(playerId, pluginName);
   };
 }
@@ -144,9 +146,11 @@ function buildPlayerPluginDataGetter(pluginName) {
  */
 function buildUserPluginDataGetter(pluginName, byPlayerId = false) {
   return byPlayerId ? (playerId) => {
+        if (playerId === undefined) throw new Error(`playerId unexpectedly undefined`);
         return getUserData(idToAuth[playerId], pluginName);
       } :
       (auth) => {
+        if (auth === undefined) throw new Error(`auth unexpectedly undefined`);
         return getUserData(auth, pluginName);
       };
 }

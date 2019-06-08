@@ -3,6 +3,9 @@
  *
  * Changelog:
  *
+ * 1.2.1:
+ *  - add sav/game-state
+ *
  * 1.2.0:
  *  - add sav/chat to core
  *
@@ -15,11 +18,12 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/core`,
   author: `saviola`,
-  version: `1.2.0`,
+  version: `1.2.1`,
   dependencies: [
     `sav/chat`,
     `sav/commands`,
     `sav/cron`,
+    `sav/game-state`,
     `sav/help`,
     `sav/players`,
     `sav/players-helper`,

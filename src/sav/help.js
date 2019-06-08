@@ -13,7 +13,8 @@
  * room.getPlugin(`sav/help`).registerHelp(`auth`, ` ROLE PASSWORD.`);
  *
  * Which will result in the output `Usage: !auth ROLE PASSWORD.` when typing
- * `!help auth`.
+ * `!help auth`. You can specify an array of roles for which to display the
+ * help as the third parameter.
  *
  * To display help programmatically, you can use
  *
@@ -22,6 +23,12 @@
  * for this example.
  *
  * Changelog:
+ *
+ * 1.1.0:
+ *  - `!help` command now excludes commands known to be unavailable to the
+ *    calling player based on their roles (if the roles plugin is loaded)
+ *  - `!help` command now also lists sub-commands
+ *  - `registerHelp()` now accepts `roles` and `numArgs` parameters
  *
  * 1.0.2:
  *  - adjust to HHM 0.9.1
@@ -41,11 +48,13 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/help`,
   author: `saviola`,
-  version: `1.0.2`,
+  version: `1.1.0`,
   dependencies: [
     `sav/commands`
   ],
 };
+
+const commandHelpInfo = {};
 
 //
 // Plugin functions
@@ -54,11 +63,21 @@ room.pluginSpec = {
 /**
  * TODO documentation
  */
-function createCommandList() {
+function createCommandList(playerId) {
+  const rolesPlugin = room.getPlugin(`sav/roles`) ||
+      { hasPlayerRole : () => true };
+
   return [...new Set(room.getPluginManager().getHandlerNames()
-      .filter(h => h.startsWith(`onCommand`))
-      .map(h => h.split(`_`)[1] || ``)
-      .filter(h => h.length > 0))];
+      .filter((h) => h.startsWith(`onCommand`))
+      .filter((h) => {
+        return !h.startsWith(`onCommand_help_`) &&
+            (commandHelpInfo[h] === undefined
+            || commandHelpInfo[h].roles.length === 0
+            || commandHelpInfo[h].roles.some((r) =>
+                rolesPlugin.hasPlayerRole(playerId, r)))})
+      .map((h) => h.split(`_`).slice(1).join(` `) || ``)
+      .filter((h) => h.length > 0))
+  ];
 }
 
 /**
@@ -116,11 +135,17 @@ function prepareCommand(command) {
 /**
  * Helper function to register a help text for the given command.
  */
-function registerHelp(command, helpText) {
+function registerHelp(command, helpText, { numArgs = "", roles = [] } = {}) {
   command = prepareCommand(command);
 
   helpText = `Usage: ${getCommandPrefix()}`
       + `${command.split(`_`).join(` `)}${helpText}`;
+
+  commandHelpInfo[`onCommand${numArgs}_${command}`] = {
+    helpText,
+    numArgs,
+    roles,
+  };
 
   room[`onCommand_help_${command}`] = (player) => room.sendChat(helpText, player.id);
 
@@ -137,7 +162,7 @@ function registerHelp(command, helpText) {
 function onCommandHelp0Handler(player) {
   room.sendChat(`List of available commands, type ${getCommandPrefix()}help `
     + `command to get help for a specific command:`, player.id);
-  room.sendChat(createCommandList().join(`, `), player.id);
+  room.sendChat(createCommandList(player.id).join(`, `), player.id);
 }
 
 /**
