@@ -5,9 +5,12 @@
  * If no such role is defined in the configuration, anyone getting admin by the
  * host or the room script will have access.
  *
- * TODO test and extend
- *
  * Changelog:
+ *
+ * 1.1.2:
+ *  - adjust to new `sav/roles` API
+ *  - loading, enabling and disabling plugins now requires host role
+ *  - host role is no longer automatically created
  *
  * 1.1.1:
  *  - adjust to new `sav/help` API
@@ -34,7 +37,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/plugin-control`,
   author: `saviola`,
-  version: `1.1.1`,
+  version: `1.1.2`,
   dependencies: [
     `sav/help`,
     `sav/roles`,
@@ -111,7 +114,8 @@ function onCommandPluginListHandler(player, [filter = ``] = []) {
 async function onCommandPluginLoadHandler(player, arguments) {
   const playerId = player.id;
 
-  if (!roles.ensurePlayerRole(playerId, `host`, room, `plugin load`)) {
+  if (!roles.ensurePlayerRoles(playerId, `host`, room,
+      { feature: `plugin load` })) {
     return;
   }
 
@@ -149,7 +153,8 @@ async function onCommandPluginLoadHandler(player, arguments) {
 function onCommandPluginDisableHandler(player, [pluginName] = []) {
   const playerId = player.id;
 
-  if (!roles.ensurePlayerRole(playerId, `host`, room, `plugin disable`)) {
+  if (!roles.ensurePlayerRoles(playerId, `host`, room,
+      { feature: `plugin disable` })) {
     return;
   }
 
@@ -179,7 +184,8 @@ function onCommandPluginDisableHandler(player, [pluginName] = []) {
 function onCommandPluginEnableHandler(player, [pluginName] = []) {
   const playerId = player.id;
 
-  if (!roles.ensurePlayerRole(playerId, `host`, room, `plugin enable`)) {
+  if (!roles.ensurePlayerRoles(playerId, `host`, room,
+      { feature: `plugin enable` })) {
     return;
   }
 
@@ -212,20 +218,16 @@ function onRoomLinkHandler() {
   help = room.getPlugin(`sav/help`);
 
   if (!roles.hasRole(`host`)) {
-    roles.addOrUpdateRole(`host`);
-    room.onPlayerAdminChange = (player, byPlayer) => {
-      if (typeof byPlayer !== `undefined` && byPlayer.id !== 0) return;
-
-      roles.setPlayerRole(player.id, `host`, player.admin);
-    }
+    room.log(`The "host" role does not exist, some features of this plugin `
+        + `will be unavailable`);
   }
 
   help.registerHelp(`plugin list`,
       ` [FILTER], list loaded, enabled, and disabled plugins.`)
       .registerHelp(`plugin load`,
-      ` NAME URL, at least one of NAME or URL must be specified.`, { roles: [`admin`] })
-      .registerHelp(`plugin disable`, ` NAME`, { roles: [`admin`] })
-      .registerHelp(`plugin enable`, ` NAME`, { roles: [`admin`] });
+      ` NAME URL, at least one of NAME or URL must be specified.`, { roles: [`host`] })
+      .registerHelp(`plugin disable`, ` NAME`, { roles: [`host`] })
+      .registerHelp(`plugin enable`, ` NAME`, { roles: [`host`] });
 }
 
 //

@@ -29,9 +29,10 @@
  *  - addPlayerRole(playerId, role, persistent = false): adds a role to the given
  *    player, making it persistent across room restarts if persistent is set to
  *    true
- *  - ensurePlayerRole(playerId, role, plugin, feature, message): This checks
- *    if the player has the given role, returns true if they do, false if they
- *    don't, and sends a  customizable PM to the player if false is returned
+ *  - ensurePlayerRoles(playerId, role, plugin, { userRole, feature, message }):
+ *    This checks if the player has the given role, returns true if they do,
+ *    false if they don't, and sends a  customizable PM to the player if false
+ *    is returned
  *  - getPlayerRoles(playerId): Returns an array of roles for the given player
  *  - getRole(roleName, { offlinePlayers = false}): Returns information for the
  *    given role (name, password, players in the room having the role)
