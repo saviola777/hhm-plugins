@@ -32,7 +32,7 @@
  * (the number indicates the number of arguments after the command), with the
  * following parameters:
  *
- * - playerId: player ID of the issuing player
+ * - player: player object of the issuing player
  * - arguments: Array of space-separated arguments in the command, in this case
  *    ["foo"]
  * - argumentString: String containing all arguments, in this case "foo"
@@ -58,6 +58,7 @@
  *  - fix a problem where messages containing multiple command prefixes and
  *    nothing else would be interpreted as a command
  *  - adjust to new sendChat API
+ *  - add !info function previously in the plugin-control plugin
  *
  * 1.4.1:
  *  - adjust to HHM 0.9.1, player objects are now passed to event handlers
@@ -214,6 +215,14 @@ function parseMessage(message, numArgsMax, commandPrefix, separator) {
 //
 
 /**
+ * TODO documentation
+ */
+function onCommandInfo0Handler() {
+  room.sendChat(`Running HHM version ${HHM.version.identifier}, built on `
+      + `${HHM.version.buildDate}`);
+}
+
+/**
  * Triggers command events if a command was found in the incoming message.
  *
  * TODO needs buffering or similar to avoid displaying command after the fact
@@ -252,4 +261,5 @@ function onPlayerChatHandler(player, message, { returnValue }) {
 
 room.parseMessage = parseMessage;
 
+room.onCommand0_info = onCommandInfo0Handler;
 room.onPlayerChat = onPlayerChatHandler;

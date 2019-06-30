@@ -20,4 +20,4 @@ HHM.config.repositories = [
 ```
 
 For more information on how to write plugins, check out the
-[HHM API documentation](https://haxplugins.tk/docs).
+[HHM API documentation](https://hhm.surge.sh/api).

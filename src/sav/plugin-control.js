@@ -11,6 +11,7 @@
  *  - adjust to new `sav/roles` API
  *  - loading, enabling and disabling plugins now requires host role
  *  - host role is no longer automatically created
+ *  - !info function moved to command plugin
  *
  * 1.1.1:
  *  - adjust to new `sav/help` API
@@ -57,28 +58,9 @@ let roles, help;
 // Plugin functions
 //
 
-/**
- * TODO documentation
- */
-function makeRawUrl(url) {
-  if (url.includes(`pastebin`) && !url.includes(`raw`)) {
-    return `https://pastebin.com/raw/${url.substr(url.lastIndexOf(`/`) + 1)}`;
-  }
-
-  return url;
-}
-
 //
 // Event handlers
 //
-
-/**
- * TODO documentation
- */
-function onCommandInfoHandler() {
-  room.sendChat(`Running HHM version ${HHM.version.identifier}, built on `
-      + `${HHM.version.buildDate} from URL ${HHM.baseUrl}`);
-}
 
 /**
  * TODO documentation
@@ -127,9 +109,9 @@ async function onCommandPluginLoadHandler(player, arguments) {
 
   if (arguments.length > 1) {
     pluginName = arguments[0];
-    pluginUrl = makeRawUrl(arguments[1]);
+    pluginUrl = arguments[1];
   } else if (arguments[0].startsWith(`http`)) {
-    pluginUrl = makeRawUrl(arguments[0]);
+    pluginUrl = arguments[0];
   } else {
     pluginName = arguments[0];
   }
@@ -139,7 +121,7 @@ async function onCommandPluginLoadHandler(player, arguments) {
   let pluginId = await manager.addPlugin({ pluginName, pluginUrl});
 
   if (pluginId === -1) {
-    room.sendChat(`Unable to load plugin from URL ${pluginUrl}.`,
+    room.sendChat(`Unable to load plugin from URL or repositories`,
         playerId, { prefix: HHM.log.level.ERROR });
   } else {
     pluginName = room.getPluginManager().getPluginName(pluginId);
@@ -234,7 +216,6 @@ function onRoomLinkHandler() {
 // Exports
 //
 
-room.onCommand_info = onCommandInfoHandler;
 room.onCommand_plugin_list = onCommandPluginListHandler;
 room.onCommand_plugin_load = onCommandPluginLoadHandler;
 room.onCommand_plugin_disable = onCommandPluginDisableHandler;
