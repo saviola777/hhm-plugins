@@ -102,7 +102,7 @@ async function onHhmBeforePluginLoadedHandler({ plugin }) {
  * TODO documentation
  */
 async function onHhmPluginDisabledHandler({ plugin }) {
-  return await persistPluginData(plugin);
+  return persistPluginData(plugin);
 }
 
 //

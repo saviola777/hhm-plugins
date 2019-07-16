@@ -24,7 +24,11 @@ room.pluginSpec = {
   // Make sure to document configuration parameters here or above
   config: {
     param: `defaultValue`,
-  }
+  },
+  configDescriptions: {
+    param: `Description of parameter`,
+  },
+  incompatible_with: [`aut/otherPlugin4`],
 };
 
 //

@@ -1,0 +1,23 @@
+{
+  "name": "saviola777/hhm-plugins",
+  "description": "saviola's HHM plugins.",
+  "author": "saviola",
+  "config": {
+    "path": "src"
+  },
+  "plugins": [
+    "hhm/core",
+    "hhm/persistence",
+    "sav/chat",
+    "sav/commands",
+    "sav/core",
+    "sav/cron",
+    "sav/force-same-name",
+    "sav/game-state",
+    "sav/help",
+    "sav/players",
+    "sav/players-helper",
+    "sav/plugin-control",
+    "sav/roles"
+  ]
+}
