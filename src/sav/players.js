@@ -33,6 +33,10 @@
  *
  * Changelog:
  *
+ * 1.3.2:
+ *  - fix ghost kick which did not check player auth
+ *  - add functions findMostRecentPlayerByAuth and getUserAuths
+ *
  * 1.3.1:
  *  - fix buggy ghost kick which still used originalName property
  *  - move onPlayerLeave logic to pre-event handler hook
@@ -87,7 +91,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/players`,
   author: `saviola`,
-  version: `1.3.1`,
+  version: `1.3.2`,
   config: {
     ghostKick: true,
   }
@@ -102,21 +106,29 @@ room.pluginSpec = {
  *
  * This does not contain player data, since several players can have the same
  * auth.
+ *
+ * TODO turn into map
  */
-const usersByAuth = {};
+const userDataByAuth = {};
 
 /**
  * Maps player IDs to auth strings
+ *
+ * TODO turn into map
  */
 const idToAuth = {};
 
 /**
  * Maps connection strings to a set of associated auth strings
+ *
+ * TODO turn into map
  */
 const playersByConn = {};
 
 /**
  * Contains player data.
+ *
+ * TODO turn into map
  */
 const playersById = {};
 
@@ -160,10 +172,11 @@ function buildUserPluginDataGetter(pluginName, byPlayerId = false) {
  * room and kicks them.
  */
 function checkGhosts(playerId) {
-  const playerName = room.getPlayer(playerId).name;
+  const player = room.getPlayer(playerId);
 
   room.getPlayerList()
-      .filter((p) => p.id < playerId && p.name === playerName)
+      .filter((p) => p.id < playerId && p.name === player.name
+        && p.auth === player.auth)
       .forEach((p) => {
         room.setPlayerTeam(playerId, p.team);
         room.kickPlayer(p.id, `Ghost kick`)
@@ -204,6 +217,33 @@ function createInitialUserdataObject() {
       },
     },
   };
+}
+
+/**
+ * TODO documentation
+ */
+function findMostRecentPlayerByAuth(auth, { offlinePlayers = true }) {
+  let players = getPlayersByAuth(auth, { offlinePlayers });
+
+  if (players.length === 0) {
+    return;
+  }
+
+  if (isUserOnline(auth)) {
+    players = players.filter((p) => isPlayerOnline(p.id));
+  }
+
+  return players.slice(-1)[0];
+}
+
+/**
+ * TODO documentation
+ *
+ * TODO is it okay to copy it?
+ */
+function getUserAuths({ offlineUsers = true }) {
+  return Object.getOwnPropertyNames(userDataByAuth)
+    .filter((auth) => offlineUsers || isUserOnline(auth));
 }
 
 /**
@@ -263,21 +303,21 @@ function getPlayerData(playerId, pluginName = `sav/players`) {
  * TODO documentation
  */
 function getUserByAuth(auth) {
-  return usersByAuth[auth];
+  return userDataByAuth[auth];
 }
 
 /**
  * TODO documentation
  */
 function getUserByPlayerId(playerId) {
-  return usersByAuth[idToAuth[playerId]];
+  return userDataByAuth[idToAuth[playerId]];
 }
 
 /**
  * TODO documentation
  */
 function getUserData(auth, pluginName = `sav/players`) {
-  const user = usersByAuth[auth];
+  const user = userDataByAuth[auth];
 
   return getData(user, pluginName);
 }
@@ -364,7 +404,7 @@ function createPlayerInjectionPreEventHandlerHook(...argumentIndices) {
  */
 function onPersistHandler() {
   return {
-    usersByAuth,
+    usersByAuth: userDataByAuth,
     idToAuth,
     playersByConn,
     playersById,
@@ -389,6 +429,7 @@ function onPlayerLeaveEventStateValidator({}, player) {
  * TODO documentation
  */
 function onPlayerJoinPreEventHandlerHook({}, player) {
+
   if (player.auth === null) {
     room.kickPlayer(player.id,
         `Authentication failed, please use a Web `
@@ -398,8 +439,8 @@ function onPlayerJoinPreEventHandlerHook({}, player) {
     return false;
   }
 
-  if (usersByAuth[player.auth] === undefined) {
-    usersByAuth[player.auth] = createInitialUserdataObject();
+  if (userDataByAuth[player.auth] === undefined) {
+    userDataByAuth[player.auth] = createInitialUserdataObject();
   }
 
   // TODO keep team / admin over re-joins and automatically join the team if
@@ -463,10 +504,10 @@ function onPlayerTeamChangePreEventHandlerHook({}, player) {
 function onRestoreHandler(data, pluginSpec) {
   if (data === undefined) return;
 
-  $.extend(usersByAuth, data.usersByAuth);
+  $.extend(userDataByAuth, data.usersByAuth);
 
   // Remove all references to previous ID
-  Object.getOwnPropertyNames(usersByAuth)
+  Object.getOwnPropertyNames(userDataByAuth)
       .forEach((auth) => getUserData(auth).ids.clear());
 }
 
@@ -514,7 +555,7 @@ function onRoomLinkHandler() {
   hostPlayer.auth = `HOST_AUTH`;
   hostPlayer.conn = `HOST_CONN`;
   playersById[0] = createInitialPlayerObject(hostPlayer);
-  usersByAuth[hostPlayer.auth] = createInitialUserdataObject();
+  userDataByAuth[hostPlayer.auth] = createInitialUserdataObject();
   const userData = getUserData(hostPlayer.auth);
   userData.ids.add(0);
   userData.conns.add(hostPlayer.conn);
@@ -530,11 +571,13 @@ function onRoomLinkHandler() {
 
 room.buildPlayerPluginDataGetter = buildPlayerPluginDataGetter;
 room.buildUserPluginDataGetter = buildUserPluginDataGetter;
+room.findMostRecentPlayerByAuth = findMostRecentPlayerByAuth;
 room.getPlayerData = getPlayerData;
 room.getPlayersByAuth = getPlayersByAuth;
 room.getUserByPlayerId = getUserByPlayerId;
 room.getUserByAuth = getUserByAuth;
 room.getUserData = getUserData;
+room.getUserAuths = getUserAuths;
 room.hasPlayer = hasPlayer;
 room.isPlayerOnline = isPlayerOnline;
 room.isUserOnline = isUserOnline;

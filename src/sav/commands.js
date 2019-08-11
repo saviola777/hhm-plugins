@@ -118,7 +118,7 @@ function removeMultiCommandPrefix(message, commandPrefix) {
  */
 function triggerEvents(playerId, parsedMessage) {
   const eventHandlers = room.getPluginManager().getHandlerNames()
-  .filter(handler => handler.startsWith(`onCommand`));
+    .filter(handler => handler.startsWith(`onCommand`));
 
   let subcommand = parsedMessage.command;
   const potentialSubcommands = [subcommand];

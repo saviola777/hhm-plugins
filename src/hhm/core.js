@@ -84,7 +84,7 @@ function onHhmPropertySetHandler({ plugin, propertyName, propertyValue }) {
     }
 
     plugin.pluginSpec.name = propertyValue;
-    room.getPluginManager().room._pluginIds[propertyValue] = plugin._id;
+    room.getPluginManager().pluginIds.set(propertyValue, plugin._id);
 
     return true;
   }

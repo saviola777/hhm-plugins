@@ -48,6 +48,11 @@
  *
  * Changelog:
  *
+ * 1.3.0:
+ *  - support both IDs and auths for most functions
+ *  - add onUserRole events
+ *  - onPlayerRole now passes the player object instead of the player ID
+ *
  * 1.2.1:
  *  - rename `persistent` to `userRole`
  *  - add `userRole` parameter to most of the functions and event handlers
@@ -76,7 +81,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/roles`,
   author: `saviola`,
-  version: `1.2.1`,
+  version: `1.3.0`,
   dependencies: [
     `sav/commands`,
     `sav/help`,
@@ -97,7 +102,7 @@ room.pluginSpec = {
 /**
  * TODO documentation
  */
-let getPlayerAuth, getUserAuth;
+let getPlayerData, getUserData;
 
 //
 // Plugin functions
@@ -116,30 +121,74 @@ function addOrUpdateRole(role, password) {
 }
 
 /**
- * Add the given role to the given player.
+ * TODO documentation
  */
-function addPlayerRole(playerId, role, userRole = false) {
-  provideAuthenticationInfo(playerId);
+function addRole(roles, role) {
+  const changedRoles = !roles.has(role);
 
-  const playerRoles = getPlayerAuth(playerId).roles,
-      userRoles = getUserAuth(playerId).roles;
-
-  const returnValue = !playerRoles.has(role);
-
-  if (userRole && !userRoles.has(role)) {
-    userRoles.add(role);
+  if (changedRoles) {
+    roles.add(role);
   }
 
-  if (returnValue) {
-    playerRoles.add(role);
-    triggerAuthenticationEvents(playerId, role, userRole);
-  }
-
-  return returnValue;
+  return changedRoles;
 }
 
-function addUserRole(auth, role) {
-  const userRoles = getUserAuth(playerId).roles
+/**
+ * Add the given role to the given player.
+ */
+function addPlayerRole(playerIdOrAuth, role, userRole = false) {
+  const { playerId, auth } = determinePlayerIdAndAuth(playerIdOrAuth);
+
+  provideAuthenticationInfo(playerId, auth);
+
+  if (!userRole && playerId === undefined) {
+    throw new Error(`Failed to assign player role ${role} to user ${auth}`
+      + `: user is not online`);
+  }
+
+  let changedPlayerRoles = false;
+
+  if (playerId !== undefined) {
+    changedPlayerRoles = addRole(getPlayerData(playerId).roles, role);
+  }
+
+  let changedUserRoles = false;
+
+  if (userRole) {
+    changedUserRoles = addRole(getUserData(auth).roles, role);
+  }
+
+  const rolesChanged = changedPlayerRoles || changedUserRoles;
+
+  if (rolesChanged) {
+    triggerAuthenticationEvents(playerId, auth, role, userRole);
+  }
+
+  return rolesChanged;
+}
+
+/**
+ * TODO documentation
+ */
+function determinePlayerIdAndAuth(playerIdOrAuth) {
+  let playerId, auth;
+
+  if (playerIdOrAuth === undefined) {
+    throw new TypeError(`Parameter playerIdOrAuth must not be undefined`);
+  }
+
+  if (Number.isInteger(playerIdOrAuth)) {
+    playerId = playerIdOrAuth;
+    auth = room.getPlayer(playerId).auth ||
+        (() => { throw new Error(`Invalid player ID ${playerId}`) })();
+  } else {
+    auth = playerIdOrAuth;
+    const player = room.getPlugin(`sav/players`)
+      .getMostRecentPlayerByAuth(auth, { offlinePlayers: true });
+    playerId = player !== undefined ? player.id : undefined;
+  }
+
+  return { playerId, auth };
 }
 
 /**
@@ -155,10 +204,17 @@ function addUserRole(auth, role) {
  *  If ${feature} is undefined, it will only print the plugin name.
  *
  */
-function ensurePlayerRoles(playerId, roles, plugin, { userRole = false, feature,
+function ensurePlayerRoles(playerIdOrAuth, roles, plugin, { userRole = false, feature,
                            message = `Access denied` } = {}) {
+  const { playerId } = determinePlayerIdAndAuth(playerIdOrAuth);
+
+  if (!userRole && playerId === undefined) {
+    throw new Error(`Failed to ensure player role ${role} for user ${auth}`
+        + `: user is not online`);
+  }
+
   roles = roles.constructor !== Array ? [roles] : roles;
-  if (roles.some((role) => room.hasPlayerRole(playerId, role, userRole))) {
+  if (roles.some((role) => room.hasPlayerRole(playerIdOrAuth, role, userRole))) {
     return true;
   }
 
@@ -170,9 +226,11 @@ function ensurePlayerRoles(playerId, roles, plugin, { userRole = false, feature,
     pluginFeature = `${feature} of ${pluginFeature}`;
   }
 
-  room.sendChat(`${message} for ${pluginFeature}. ` +
-      `It requires one of the following ${userRole ? `user` : `player`} roles: `
-          + rolesString, playerId, { prefix: HHM.log.level.ERROR });
+  if (playerId !== undefined) {
+    room.sendChat(`${message} for ${pluginFeature}. ` +
+        `It requires one of the following ${userRole ? `user` : `player`} roles: `
+        + rolesString, playerId, {prefix: HHM.log.level.ERROR});
+  }
 
   return false;
 }
@@ -180,10 +238,16 @@ function ensurePlayerRoles(playerId, roles, plugin, { userRole = false, feature,
 /**
  * Returns an array of roles for the given player.
  */
-function getPlayerRoles(playerId) {
-  provideAuthenticationInfo(playerId);
+function getPlayerRoles(playerIdOrAuth) {
+  const { playerId, auth } = determinePlayerIdAndAuth(playerIdOrAuth);
 
-  return [...getPlayerAuth(playerId).roles];
+  if (playerId === undefined) {
+    return [];
+  }
+
+  provideAuthenticationInfo(playerId, auth);
+
+  return [...getPlayerData(playerId).roles];
 }
 
 /**
@@ -204,7 +268,7 @@ function getRole(roleName, { offlinePlayers = false } = {}) {
     roleName: roleName,
     players: roleExists ? room.getPlayerList({ offlinePlayers })
       .filter((p) => hasPlayerRole(p.id)) : [],
-    password: roleExists ? getRoles()[roleName] : ``,
+    password: roleExists ? room.getConfig(`roles`)[roleName] : ``,
   };
 }
 
@@ -225,11 +289,15 @@ function getRoles({ offlinePlayers = false } = {}) {
 /**
  * Returns whether the given player has the given (user) role.
  */
-function hasPlayerRole(playerId, role, userRole = false) {
-  provideAuthenticationInfo(playerId);
+function hasPlayerRole(playerIdOrAuth, role, userRole = false) {
+  const { playerId, auth } = determinePlayerIdAndAuth(playerIdOrAuth);
 
-  return userRole ? getUserAuth(playerId).roles.has(role)
-      : getPlayerAuth(playerId).roles.has(role);
+  provideAuthenticationInfo(playerId, auth);
+
+  if (!userRole && playerId === undefined) return false;
+
+  return userRole ? getUserData(auth).roles.has(role)
+      : getPlayerData(playerId).roles.has(role);
 }
 
 /**
@@ -242,29 +310,40 @@ function hasRole(role) {
 /**
  * TODO documentation
  */
-function provideAuthenticationInfo(playerId) {
-  const playerAuth = getPlayerAuth(playerId);
-  const userAuth = getUserAuth(playerId);
+function provideAuthenticationInfo(playerId, auth) {
+  if (playerId !== undefined) {
+    const playerData = getPlayerData(playerId);
+    playerData.roles = playerData.roles || new Set();
+  }
 
-  playerAuth.roles = playerAuth.roles || new Set();
-  userAuth.roles = userAuth.roles || new Set();
+  const userData = getUserData(auth);
+  userData.roles = userData.roles || new Set();
 }
 
 /**
- * Removes the given role from the given player and returns whether the player
- * actually had the given role beforehand.
+ * Removes the given role from the given player/user and returns whether the
+ * player/user actually had the given role beforehand.
  */
-function removePlayerRole(playerId, role) {
-  provideAuthenticationInfo(playerId);
+function removePlayerRole(playerIdOrAuth, role) {
+  const { playerId, auth } = determinePlayerIdAndAuth(playerIdOrAuth);
 
-  const returnValue = getPlayerAuth(playerId).roles.delete(role);
-  const userRole = getUserAuth(playerId).roles.delete(role);
+  provideAuthenticationInfo(playerId, auth);
 
-  if (returnValue) {
-    triggerAuthenticationEvents(playerId, role, userRole, false);
+  let hadPlayerRole = false;
+
+  if (playerId !== undefined) {
+    hadPlayerRole = getPlayerData(playerId).roles.delete(role);
   }
 
-  return returnValue;
+  const hadUserRole = getUserData(auth).roles.delete(role);
+
+  const hadRole = hadPlayerRole || hadUserRole;
+
+  if (hadRole) {
+    triggerAuthenticationEvents(playerId, auth, role, hadUserRole, false);
+  }
+
+  return hadRole;
 }
 
 /**
@@ -282,28 +361,41 @@ function removeRole(role) {
     removePlayerRole(p.id, role);
   });
 
+  room.getPlugin(`sav/players`).getUserAuths()
+    .forEach((auth) => removePlayerRole(auth, role));
+
   return returnValue;
 }
 
 /**
  * Convenience function for adding / removing a role based on a boolean state.
  */
-function setPlayerRole(playerId, role, state = true, userRole = false) {
-  state ? room.addPlayerRole(playerId, role, userRole)
-      : room.removePlayerRole(playerId, role);
+function setPlayerRole(playerIdOrAuth, role, state = true, userRole = false) {
+  state ? room.addPlayerRole(playerIdOrAuth, role, userRole)
+      : room.removePlayerRole(playerIdOrAuth, role);
 }
 
 /**
  * TODO documentation
  */
-function triggerAuthenticationEvents(playerId, role, userRole = false,
+function triggerAuthenticationEvents(playerId, auth, role, userRole = false,
                                      added = true) {
   const addedString = added ? `Added` : `Removed`;
 
-  room.triggerEvent(`onPlayerRole`, playerId, role, added, userRole);
-  room.triggerEvent(`onPlayerRole_${role}`, playerId, added, userRole);
-  room.triggerEvent(`onPlayerRole${addedString}`, playerId, role, userRole);
-  room.triggerEvent(`onPlayerRole${addedString}_${role}`, playerId, userRole);
+  if (playerId !== undefined) {
+    const player = room.getPlayer(playerId, { offlinePlayers: true });
+    room.triggerEvent(`onPlayerRole`, player, role, added, userRole);
+    room.triggerEvent(`onPlayerRole_${role}`, player, added, userRole);
+    room.triggerEvent(`onPlayerRole${addedString}`, player, role, userRole);
+    room.triggerEvent(`onPlayerRole${addedString}_${role}`, player, userRole);
+  }
+
+  if (userRole) {
+    room.triggerEvent(`onUserRole`, auth, role, added);
+    room.triggerEvent(`onUserRole_${role}`, auth, added);
+    room.triggerEvent(`onUserRole${addedString}`, auth, role);
+    room.triggerEvent(`onUserRole${addedString}_${role}`, auth);
+  }
 }
 
 //
@@ -355,10 +447,10 @@ function onRoomLinkHandler() {
     room.setConfig(`roles`, {});
   }
 
-  getPlayerAuth = room.getPlugin(`sav/players`)
+  getPlayerData = room.getPlugin(`sav/players`)
       .buildPlayerPluginDataGetter(`sav/roles`);
-  getUserAuth = room.getPlugin(`sav/players`)
-      .buildUserPluginDataGetter(`sav/roles`, true);
+  getUserData = room.getPlugin(`sav/players`)
+      .buildUserPluginDataGetter(`sav/roles`);
 
   room.getPlugin(`sav/help`).registerHelp(`auth`, ` ROLE PASSWORD`);
 }
@@ -367,12 +459,12 @@ function onRoomLinkHandler() {
  * TODO documentation
  */
 function onPlayerJoinHandler(player) {
-  provideAuthenticationInfo(player.id);
+  provideAuthenticationInfo(player.id, player.auth);
   if (typeof room.getConfig().defaultRole !== `undefined`) {
     room.addPlayerRole(player.id, room.getConfig().defaultRole);
   }
 
-  [...getUserAuth(player.id).roles].forEach((role) => {
+  [...getUserData(player.auth).roles].forEach((role) => {
     addPlayerRole(player.id, role);
   });
 }
