@@ -181,7 +181,7 @@ function determinePlayerIdAndAuth(playerIdOrAuth) {
 
   if (Number.isInteger(playerIdOrAuth)) {
     playerId = playerIdOrAuth;
-    auth = room.getPlayer(playerId).auth ||
+    auth = (room.getPlayer(playerId, { offlinePlayers: true }) || {}).auth ||
         (() => { throw new Error(`Invalid player ID ${playerId}`) })();
   } else {
     auth = playerIdOrAuth;
