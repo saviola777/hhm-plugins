@@ -52,6 +52,8 @@
  *  - support both IDs and auths for most functions
  *  - add onUserRole events
  *  - onPlayerRole now passes the player object instead of the player ID
+ *  - switch to sendAnnouncement
+ *  - fix problem in getRoles and getRole
  *
  * 1.2.1:
  *  - rename `persistent` to `userRole`
@@ -227,9 +229,9 @@ function ensurePlayerRoles(playerIdOrAuth, roles, plugin, { userRole = false, fe
   }
 
   if (playerId !== undefined) {
-    room.sendChat(`${message} for ${pluginFeature}. ` +
+    room.sendAnnouncement(`${message} for ${pluginFeature}. ` +
         `It requires one of the following ${userRole ? `user` : `player`} roles: `
-        + rolesString, playerId, {prefix: HHM.log.level.ERROR});
+        + rolesString, playerId, { prefix: HHM.log.level.ERROR });
   }
 
   return false;
@@ -256,10 +258,10 @@ function getPlayerRoles(playerIdOrAuth) {
  * Returns an object which contains
  *
  *  - roleName: name of the role
- *  - players: array of player objects currently in the room who have the role
+ *  - players: array of players (currently in the room) who have the role
  *  - password: role password
  *
- * Note that this function does not care if the function exists it will still
+ * Note that this function does not care if the role exists it will still
  * return a valid result (no players, no password).
  */
 function getRole(roleName, { offlinePlayers = false } = {}) {
@@ -267,7 +269,7 @@ function getRole(roleName, { offlinePlayers = false } = {}) {
   return {
     roleName: roleName,
     players: roleExists ? room.getPlayerList({ offlinePlayers })
-      .filter((p) => hasPlayerRole(p.id)) : [],
+      .filter((p) => hasPlayerRole(p.id, roleName)) : [],
     password: roleExists ? room.getConfig(`roles`)[roleName] : ``,
   };
 }
@@ -423,15 +425,18 @@ function onCommandAuthHandler(player, arguments, argumentString, message) {
       && roles[role] !== ``) {
     room.addPlayerRole(playerId, role, room.getConfig().persistentRoles);
     if (room.getConfig().printAuthEventsToRoom) {
-      room.sendChat(`${player.name} authenticated for role ${role}`);
+      room.sendAnnouncement(`${player.name} authenticated for role ${role}`);
     } else {
-      room.sendChat(`You authenticated for role ${role}`, playerId);
+      room.sendAnnouncement(`You authenticated for role ${role}`, playerId);
     }
   } else {
     if (room.getConfig().printAuthEventsToRoom) {
-      room.sendChat(`${player.name} failed to authenticate for role ${role}`);
+      room.sendAnnouncement(
+          `${player.name} failed to authenticate for role ${role}`,
+          { prefix: `error` });
     } else {
-      room.sendChat(`Unknown role ${role} or wrong password`, playerId);
+      room.sendAnnouncement(`Unknown role ${role} or wrong password`, playerId,
+          { prefix: `error` });
     }
   }
 

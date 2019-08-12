@@ -13,6 +13,12 @@
  *
  * Changelog:
  *
+ * 0.9.4:
+ *  - use sendAnnouncement instead of sendChat
+ *  - support prefix- and plugin-specific formatting settings for announcements
+ *  - support disabling sendChat by automatically redirecting calls to it to
+ *    sendAnnouncement
+ *
  * 0.9.3:
  *  - use destructuring argument for sendChat prefix
  *  - fix problem where 3 characters disappeared for continuation messages
@@ -54,7 +60,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/chat`,
   author: `saviola`,
-  version: `0.9.3`,
+  version: `0.9.4`,
   dependencies: [
     `sav/commands`,
     `sav/players`
@@ -66,18 +72,24 @@ room.pluginSpec = {
   },
   config: {
     addPlayerIdToNickname: true, // only relevant if channels enabled
+    sendAnnouncementDefaults: { color: 0xCCFFCC, style: `normal`, sound: 0 },
     commandShortcuts: true,
+    disableSendChat: false,
     enableChannels: false,
     hhmPrefix: false,
     maxPlayerNameLength: 15, // only relevant if channels enabled
     playerPrefix: ` `,
     pluginPrefix: false,
     pmPrefix: true,
+    prefixFormatDefaults: {
+      error: { color: 0xFF0000, style: `bold` },
+      PM: { style: `italic`, sound: 1 },
+    },
     prefixStart: ``,
     prefixEnd: ` ::`,
     prefixElementStart: ``,
     prefixElementEnd: `|`,
-    sendChatMaxLength: 2686,
+    sendAnnouncementMaxLength: 2988,
     timestampPrefix: true,
   }
 };
@@ -86,6 +98,7 @@ room.pluginSpec = {
 // Global variables
 //
 
+// TODO turn into map
 const channels = {};
 const channelTypes = { AUTO: `auto`, MANUAL: `manual`};
 const config = room.getConfig();
@@ -93,7 +106,7 @@ const teamChannelNames = [`spec`, `red`, `blue`];
 const reservedChannelNames = { GLOBAL: `global` };
 
 // Initialized in onRoomLinkHandler
-let sendChatNative, getChatInfo;
+let sendAnnouncementNative, getChatInfo;
 
 //
 // Plugin functions
@@ -186,7 +199,7 @@ function joinChannel(playerId, channel, password = ``) {
   if (chatInfo.channels.current === ``) {
     updateCurrentChannel(playerId, channel);
   } else {
-    room.sendChat(`Joined channel &${channel}`, playerId);
+    room.sendAnnouncement(`Joined channel &${channel}`, playerId);
   }
 
 
@@ -204,7 +217,7 @@ function leaveChannel(playerId, channel) {
 
   channels[channel].players.delete(playerId);
 
-  room.sendChat(`Left channel &${channel}`, playerId);
+  room.sendAnnouncement(`Left channel &${channel}`, playerId);
 
   return true;
 }
@@ -231,7 +244,7 @@ function sendPlayer(playerId, message) {
 /**
  * TODO documentation
  */
-function sendChannel(channel, message, prefix = [`HHM`]) {
+function sendChannel(channel, message, prefix = [`HHM`], format = {}) {
 
   prefix = wrapInArrayOrCopy(prefix);
 
@@ -242,7 +255,7 @@ function sendChannel(channel, message, prefix = [`HHM`]) {
   room.getPlayerList().forEach((p) => {
     if (!config.enableChannels || (channels[channel].players.has(p.id)
         && !getChatInfo(p.id).channels.muted.has(channel))) {
-      sendChatRaw(message, p.id, prefix);
+      sendAnnouncementRaw(message, p.id, format, prefix);
     }
   });
 
@@ -250,11 +263,20 @@ function sendChannel(channel, message, prefix = [`HHM`]) {
 }
 
 /**
- * Adds a prefix for system messages, then sends messages using sendChatRaw.
- *
- * TODO non-private messages sent with this message go to the global channel?
+ * TODO documentation
  */
-function sendChat({ callingPluginName }, message, playerId, { prefix = [] } = {}) {
+function sendAnnouncement({ callingPluginName }, message, playerId, color = {},
+                          style, sound) {
+
+  let prefix;
+  ({ prefix, color, style, sound } = typeof color === `object` ? color :
+      { prefix: [], color, style, sound });
+  let format = { color, style, sound };
+
+  format = $.extend({}, room.hasPlugin(callingPluginName) ?
+      room.getPlugin(callingPluginName).getConfig(`sendAnnouncementDefaults`) ||
+      {} : {}, format);
+
   prefix = wrapInArrayOrCopy(prefix);
 
   if (prefix.length === 0 && config.hhmPrefix) {
@@ -269,19 +291,10 @@ function sendChat({ callingPluginName }, message, playerId, { prefix = [] } = {}
     prefix.unshift(callingPluginName);
   }
 
-  sendChatRaw(message, playerId, prefix);
+  sendAnnouncementRaw(message, playerId, format, prefix);
 }
 
-/**
- * Splits overlong messages if necessary.
- *
- * @param message Message to be sent
- * @param playerId Receiver of the message or undefined if public message
- * @param prefix Single prefix or array of prefixes
- *
- * TODO extend for private messages
- */
-function sendChatRaw(message, playerId, prefix = []) {
+function sendAnnouncementRaw(message, playerId, format = {}, prefix) {
   message = String(message);
   let prefixWithTime;
 
@@ -301,8 +314,18 @@ function sendChatRaw(message, playerId, prefix = []) {
       continue;
     }
 
+    if (config.prefixFormatDefaults.hasOwnProperty(prefixWithTime[i])) {
+      format = Object.assign({}, config.prefixFormatDefaults[prefixWithTime[i]],
+          format);
+    }
+
     p += config.prefixElementStart + prefixWithTime[i] + config.prefixElementEnd;
   }
+
+  format = Object.assign({}, config.sendAnnouncementDefaults, format);
+
+  // Can't used Object.values() because Object.assign() changes the order
+  format = [format.color, format.style, format.sound];
 
   if (p.length > 0) {
     // Remove last prefix end element
@@ -310,32 +333,34 @@ function sendChatRaw(message, playerId, prefix = []) {
     p = `${config.prefixStart}${p}${config.prefixEnd} `;
   }
 
-  if (p.length + message.length <= 140) {
-    return sendChatNative(p + message, playerId);
+  if (p.length + message.length <= 1000) {
+    return sendAnnouncementNative(p + message, playerId, ...format);
   }
 
-  let baseIndex = 134 - p.length;
+  let baseIndex = 993 - p.length;
 
-  sendChatNative(`${p}${message.substr(0, baseIndex + 3)}...`, playerId);
+  sendAnnouncementNative(`${p}${message.substr(0, baseIndex + 3)}...`, playerId,
+      ...format);
 
   let index = baseIndex + 3;
   let i = 1;
 
-  while (i * 140 < config.sendChatMaxLength) {
+  while (i * 1000 < config.sendAnnouncementMaxLength) {
     // TODO use message length for efficiency?
     if (message[index + baseIndex + 3] === undefined) {
-      return sendChatNative(`${p}...${message.substr(index)}`, playerId);
+      return sendAnnouncementNative(`${p}...${message.substr(index)}`, playerId,
+          ...format);
     }
 
-    sendChatNative(`${p}...${message.substr(index, baseIndex)}...`, playerId);
+    sendAnnouncementNative(`${p}...${message.substr(index, baseIndex)}...`,
+        playerId, ...format);
     index += baseIndex;
     i++;
   }
 
   // TODO
-  sendChatRaw(`Overlong message was cut off by flood protection`,
-      playerId, prefix);
-
+  sendAnnouncementRaw(`Overlong message was cut off by flood protection`,
+      playerId, format, prefix);
 }
 
 /**
@@ -355,7 +380,7 @@ function updateCurrentChannel(playerId, channel) {
   chatInfo.channels.current = channel;
 
   if (chatInfo.channels.last !== chatInfo.channels.current) {
-    room.sendChat(`Now talking in &${chatInfo.channels.current}`
+    room.sendAnnouncement(`Now talking in &${chatInfo.channels.current}`
         + (chatInfo.channels.last !== `` ?
           ` (before: &${chatInfo.channels.last})` : ``), playerId);
 
@@ -384,18 +409,18 @@ function onCommandChatChannelCreate(player, [channel, password = ``]) {
   const playerId = player.id;
 
   if (channel === undefined) {
-    room.sendChat(`Please specify a channel name`, playerId,
+    room.sendAnnouncement(`Please specify a channel name`, playerId,
         { prefix: HHM.log.level.ERROR });
     return false;
-  } else if (channelSet.has(channel)) {
-    room.sendChat(`Failed to create channel &${channel}, it exists`, playerId,
-        { prefix: HHM.log.level.ERROR });
+  } else if (channels.has(channel)) {
+    room.sendAnnouncement(`Failed to create channel &${channel}, it exists`,
+        playerId, { prefix: HHM.log.level.ERROR });
     return false;
   }
 
   createChannel(channel, password);
 
-  room.sendChat(`Created channel &${channel}`
+  room.sendAnnouncement(`Created channel &${channel}`
       + (password !== `` ? ` with password "${password}"` : ``), playerId);
 
   joinChannel(playerId, channel, password);
@@ -412,7 +437,7 @@ function onCommandChatChannelSwitch(player, [channel]) {
   if (channel === undefined) {
     if (chatInfo.channels.last === undefined
         || !isPlayerInChannel(playerId, chatInfo.channels.last)) {
-      room.sendChat(`Not sure which channel to switch to`, playerId,
+      room.sendAnnouncement(`Not sure which channel to switch to`, playerId,
           { prefix: HHM.log.level.ERROR });
       return false;
     }
@@ -421,7 +446,7 @@ function onCommandChatChannelSwitch(player, [channel]) {
   }
 
   if (!isPlayerInChannel(playerId, newChannel)) {
-    room.sendChat(
+    room.sendAnnouncement(
         `Can't switch to channel ${newChannel}, you need to join it first`,
         playerId, { prefix: HHM.log.level.ERROR });
 
@@ -437,10 +462,16 @@ function onCommandChatChannelSwitch(player, [channel]) {
  * TODO documentation
  */
 function onRoomLinkHandler() {
-  sendChatNative = room.getParentRoom().sendChat;
+  //sendChatNative = room.getParentRoom().sendChat;
+  sendAnnouncementNative = room.getParentRoom().sendAnnouncement;
   getChatInfo = room.getPlugin(`sav/players`)
       .buildPlayerPluginDataGetter(`sav/chat`);
-  room.extend(`sendChat`, sendChat);
+
+  room.extend(`sendAnnouncement`, sendAnnouncement);
+
+  if (config.disableSendChat) {
+    room.extend(`sendChat`, sendAnnouncement);
+  }
 
   if (config.enableChannels) {
     room.onPlayerJoin = onPlayerJoinHandler;

@@ -7,6 +7,9 @@
  *
  * Changelog:
  *
+ * 1.1.3:
+ *  - switch to sendAnnouncement
+ *
  * 1.1.2:
  *  - adjust to new `sav/roles` API
  *  - loading, enabling and disabling plugins now requires host role
@@ -38,7 +41,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/plugin-control`,
   author: `saviola`,
-  version: `1.1.2`,
+  version: `1.1.3`,
   dependencies: [
     `sav/help`,
     `sav/roles`,
@@ -81,12 +84,12 @@ function onCommandPluginListHandler(player, [filter = ``] = []) {
 
   let filterString = filter === `` ? `` : ` (for filter "${filter}")`;
 
-  room.sendChat(`Currently ${loadedPluginIds.length} plugins loaded${filterString}.`,
+  room.sendAnnouncement(`Currently ${loadedPluginIds.length} plugins loaded${filterString}.`,
       player.id);
-  room.sendChat(`Enabled plugins: ${enabledPluginNames.join(`, `)}.`, player.id);
+  room.sendAnnouncement(`Enabled plugins: ${enabledPluginNames.join(`, `)}.`, player.id);
 
   if (disabledPluginNames.length > 0) {
-    room.sendChat(`Disabled plugins: ${disabledPluginNames.join(`, `)}.`, player.id);
+    room.sendAnnouncement(`Disabled plugins: ${disabledPluginNames.join(`, `)}.`, player.id);
   }
 }
 
@@ -121,11 +124,11 @@ async function onCommandPluginLoadHandler(player, arguments) {
   let pluginId = await manager.addPlugin({ pluginName, pluginUrl});
 
   if (pluginId === -1) {
-    room.sendChat(`Unable to load plugin from URL or repositories`,
+    room.sendAnnouncement(`Unable to load plugin from URL or repositories`,
         playerId, { prefix: HHM.log.level.ERROR });
   } else {
     pluginName = room.getPluginManager().getPluginName(pluginId);
-    room.sendChat(`Plugin ${pluginName} successfully loaded and enabled`);
+    room.sendAnnouncement(`Plugin ${pluginName} successfully loaded and enabled`);
   }
 }
 
@@ -147,17 +150,17 @@ function onCommandPluginDisableHandler(player, [pluginName] = []) {
   const manager = room.getPluginManager();
 
   if (!room.hasPlugin(pluginName)) {
-    return room.sendChat(`Invalid plugin name ${pluginName}`, playerId,
+    return room.sendAnnouncement(`Invalid plugin name ${pluginName}`, playerId,
         { prefix: HHM.log.level.ERROR });
   }
 
   if (!manager.disablePluginById(manager.getPluginId(pluginName))) {
     // TODO more error information
-    return room.sendChat(`Could not disable plugin ${pluginName}`, playerId,
+    return room.sendAnnouncement(`Could not disable plugin ${pluginName}`, playerId,
         { prefix: HHM.log.level.ERROR });
   }
 
-  room.sendChat(`Plugin ${pluginName} disabled by player ${player.name}`);
+  room.sendAnnouncement(`Plugin ${pluginName} disabled by player ${player.name}`);
 }
 
 /**
@@ -178,17 +181,17 @@ function onCommandPluginEnableHandler(player, [pluginName] = []) {
   const manager = room.getPluginManager();
 
   if (!room.hasPlugin(pluginName)) {
-    return room.sendChat(`Invalid plugin name ${pluginName}`, playerId,
+    return room.sendAnnouncement(`Invalid plugin name ${pluginName}`, playerId,
         { prefix: HHM.log.level.ERROR });
   }
 
   if (!manager.enablePluginById(manager.getPluginId(pluginName))) {
     // TODO more error information
-    return room.sendChat(`Could not enable plugin ${pluginName}`, playerId,
+    return room.sendAnnouncement(`Could not enable plugin ${pluginName}`, playerId,
         { prefix: HHM.log.level.ERROR });
   }
 
-  room.sendChat(`Plugin ${pluginName} enabled by player ` +
+  room.sendAnnouncement(`Plugin ${pluginName} enabled by player ` +
       room.getPlayer(playerId).name);
 }
 

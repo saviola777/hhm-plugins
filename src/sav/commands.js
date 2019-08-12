@@ -53,6 +53,9 @@
  *
  * Changelog:
  *
+ * 1.4.3:
+ *  - switch to sendAnnouncement
+ *
  * 1.4.2:
  *  - do not hide commands by default
  *  - fix a problem where messages containing multiple command prefixes and
@@ -87,7 +90,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/commands`,
   author: `saviola`,
-  version: `1.4.2`,
+  version: `1.4.3`,
   config: {
     commandPrefix: `!`,
     hideCommands: 0,
@@ -218,7 +221,7 @@ function parseMessage(message, numArgsMax, commandPrefix, separator) {
  * TODO documentation
  */
 function onCommandInfo0Handler() {
-  room.sendChat(`Running HHM version ${HHM.version.identifier}, built on `
+  room.sendAnnouncement(`Running HHM version ${HHM.version.identifier}, built on `
       + `${HHM.version.buildDate}`);
 }
 
@@ -244,7 +247,7 @@ function onPlayerChatHandler(player, message, { returnValue }) {
 
     // Display message, but to player only
     if (!hideMessage && hideCommands === 1) {
-      room.sendChat(message, player.id, { prefix: [`CMD`] });
+      room.sendAnnouncement(message, player.id, { prefix: [`CMD`] });
     }
 
     const eventReturnValue = triggerEvents(player.id, parsedMessage);

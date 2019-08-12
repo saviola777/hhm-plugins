@@ -24,6 +24,9 @@
  *
  * Changelog:
  *
+ * 1.1.1:
+ *  - switch to sendAnnouncement
+ *
  * 1.1.0:
  *  - `!help` command now excludes commands known to be unavailable to the
  *    calling player based on their roles (if the roles plugin is loaded)
@@ -48,7 +51,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/help`,
   author: `saviola`,
-  version: `1.1.0`,
+  version: `1.1.1`,
   dependencies: [
     `sav/commands`
   ],
@@ -147,7 +150,7 @@ function registerHelp(command, helpText, { numArgs = "", roles = [] } = {}) {
     roles,
   };
 
-  room[`onCommand_help_${command}`] = (player) => room.sendChat(helpText, player.id);
+  room[`onCommand_help_${command}`] = (player) => room.sendAnnouncement(helpText, player.id);
 
   return room;
 }
@@ -160,9 +163,9 @@ function registerHelp(command, helpText, { numArgs = "", roles = [] } = {}) {
  * General help command, which lists all available commands.
  */
 function onCommandHelp0Handler(player) {
-  room.sendChat(`List of available commands, type ${getCommandPrefix()}help `
+  room.sendAnnouncement(`List of available commands, type ${getCommandPrefix()}help `
     + `command to get help for a specific command:`, player.id);
-  room.sendChat(createCommandList(player.id).join(`, `), player.id);
+  room.sendAnnouncement(createCommandList(player.id).join(`, `), player.id);
 }
 
 /**
@@ -180,12 +183,12 @@ function onCommandHelpHandler(player, arguments) {
   const pluginNames = getPluginNamesForCommand(arguments);
 
   if (pluginNames.length === 0) {
-    room.sendChat(`No help available for the given topic, is the plugin loaded `
+    room.sendAnnouncement(`No help available for the given topic, is the plugin loaded `
         + `and enabled?`, player.id, HHM.log.ERROR);
     return;
   }
 
-  room.sendChat(`No help available for this command, it is handled by the `
+  room.sendAnnouncement(`No help available for this command, it is handled by the `
       + `following plugin(s): ${pluginNames.join(`, `)}`, player.id);
 }
 
