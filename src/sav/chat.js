@@ -26,7 +26,7 @@
  *    players plugin to chat plugin
  *
  * 0.9.2:
- *  - fix problem were using `sendChat` with non-string values would lead to
+ *  - fix problem where using `sendChat` with non-string values would lead to
  *    errors
  *  - adjust to HHM 0.9.1
  *
@@ -46,13 +46,13 @@
  * TODO add logging function for channels?
  * TODO add config documentation
  *
- * sendChatMaxLength:
+ * sendAnnouncementMaxLength:
  *
- * Overlong messages are automatically split in the HHM sendChat
+ * Overlong messages are automatically split in the HHM sendAnnouncement
  * implementation. To avoid (accidental) chat flooding, no message can be
  * longer than this value.
  *
- * By default this limits the output to 20 lines.
+ * By default this limits the output to 3000 characters.
  */
 
 var room = HBInit();

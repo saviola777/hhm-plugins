@@ -186,7 +186,7 @@ function determinePlayerIdAndAuth(playerIdOrAuth) {
   } else {
     auth = playerIdOrAuth;
     const player = room.getPlugin(`sav/players`)
-      .getMostRecentPlayerByAuth(auth, { offlinePlayers: true });
+      .findMostRecentPlayerByAuth(auth, { offlinePlayers: true });
     playerId = player !== undefined ? player.id : undefined;
   }
 
