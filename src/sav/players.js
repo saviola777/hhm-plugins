@@ -33,6 +33,9 @@
  *
  * Changelog:
  *
+ * 1.3.3:
+ *  - support noPlayer option
+ *
  * 1.3.2:
  *  - fix ghost kick which did not check player auth
  *  - add functions findMostRecentPlayerByAuth and getUserAuths
@@ -91,7 +94,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/players`,
   author: `saviola`,
-  version: `1.3.2`,
+  version: `1.3.3`,
   config: {
     ghostKick: true,
   }
@@ -399,9 +402,6 @@ function createPlayerInjectionPreEventHandlerHook(...argumentIndices) {
   }
 }
 
-/**
- * TODO documentation
- */
 function onPersistHandler() {
   return {
     usersByAuth: userDataByAuth,
@@ -411,23 +411,14 @@ function onPersistHandler() {
   }
 }
 
-/**
- * TODO documentation
- */
 function onPlayerJoinEventStateValidator({}, player) {
   return hasPlayer(player.id) && isPlayerOnline(player.id);
 }
 
-/**
- * TODO documentation
- */
 function onPlayerLeaveEventStateValidator({}, player) {
   return hasPlayer(player.id);
 }
 
-/**
- * TODO documentation
- */
 function onPlayerJoinPreEventHandlerHook({}, player) {
 
   if (player.auth === null) {
@@ -551,18 +542,20 @@ function onRoomLinkHandler() {
   // Create authentication data entry for host
   // TODO solve cleaner
   // TODO handle players already in the room
-  const hostPlayer = getPlayerNative(0);
-  hostPlayer.auth = `HOST_AUTH`;
-  hostPlayer.conn = `HOST_CONN`;
-  playersById[0] = createInitialPlayerObject(hostPlayer);
-  userDataByAuth[hostPlayer.auth] = createInitialUserdataObject();
-  const userData = getUserData(hostPlayer.auth);
-  userData.ids.add(0);
-  userData.conns.add(hostPlayer.conn);
-  userData.names.add(hostPlayer.name); // TODO make dynamic
-  userData.seen = new Date();
-  playersByConn[hostPlayer.conn] = new Set().add(hostPlayer.auth);
-  idToAuth[0] = hostPlayer.auth;
+  if (!HHM.config.room.noPlayer) {
+    const hostPlayer = getPlayerNative(0);
+    hostPlayer.auth = `HOST_AUTH`;
+    hostPlayer.conn = `HOST_CONN`;
+    playersById[0] = createInitialPlayerObject(hostPlayer);
+    userDataByAuth[hostPlayer.auth] = createInitialUserdataObject();
+    const userData = getUserData(hostPlayer.auth);
+    userData.ids.add(0);
+    userData.conns.add(hostPlayer.conn);
+    userData.names.add(hostPlayer.name); // TODO make dynamic
+    userData.seen = new Date();
+    playersByConn[hostPlayer.conn] = new Set().add(hostPlayer.auth);
+    idToAuth[0] = hostPlayer.auth;
+  }
 }
 
 //

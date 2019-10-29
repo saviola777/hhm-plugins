@@ -220,7 +220,7 @@ function parseMessage(message, numArgsMax, commandPrefix, separator) {
 /**
  * TODO documentation
  */
-function onCommandInfo0Handler() {
+function onCommandHhm0Handler() {
   room.sendAnnouncement(`Running HHM version ${HHM.version.identifier}, built on `
       + `${HHM.version.buildDate}`);
 }
@@ -264,5 +264,5 @@ function onPlayerChatHandler(player, message, { returnValue }) {
 
 room.parseMessage = parseMessage;
 
-room.onCommand0_info = onCommandInfo0Handler;
+room.onCommand0_hhm = onCommandHhm0Handler;
 room.onPlayerChat = onPlayerChatHandler;

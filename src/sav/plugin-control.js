@@ -7,6 +7,11 @@
  *
  * Changelog:
  *
+ * 1.1.4:
+ *  - adjust to sav/help version 2.0.0
+ *  - add more help texts
+ *  - add support for plugin reloading
+ *
  * 1.1.3:
  *  - switch to sendAnnouncement
  *
@@ -41,7 +46,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/plugin-control`,
   author: `saviola`,
-  version: `1.1.3`,
+  version: `1.1.4`,
   dependencies: [
     `sav/help`,
     `sav/roles`,
@@ -65,6 +70,12 @@ let roles, help;
 // Event handlers
 //
 
+const onCommandPluginListHandlerData = {
+  'sav/help': {
+    text: ` [FILTER], list loaded, enabled, and disabled plugins.`,
+  },
+};
+
 /**
  * TODO documentation
  */
@@ -75,7 +86,7 @@ function onCommandPluginListHandler(player, [filter = ``] = []) {
   let enabledPluginNames = [];
   let disabledPluginNames = [];
 
-  loadedPluginIds = loadedPluginIds.map((id) => manager.getPluginById(id))
+  loadedPluginIds = loadedPluginIds.map((id) => manager.getPlugin(id))
       .filter((plugin) => plugin.getName().indexOf(filter) !== -1);
   loadedPluginIds.forEach((plugin => {
         (plugin.isEnabled() ? enabledPluginNames : disabledPluginNames)
@@ -93,9 +104,13 @@ function onCommandPluginListHandler(player, [filter = ``] = []) {
   }
 }
 
-/**
- * TODO documentation
- */
+const onCommandPluginLoadHandlerData = {
+  'sav/help': {
+    text: ` NAME URL, at least one of NAME or URL must be specified.`,
+    roles: [`host`],
+  },
+};
+
 async function onCommandPluginLoadHandler(player, arguments) {
   const playerId = player.id;
 
@@ -120,8 +135,7 @@ async function onCommandPluginLoadHandler(player, arguments) {
   }
 
   const manager = room.getPluginManager();
-  const pluginLoader = room.getPluginManager().getPluginLoader();
-  let pluginId = await manager.addPlugin({ pluginName, pluginUrl});
+  let pluginId = await manager.addPlugin({ pluginName, pluginUrl });
 
   if (pluginId === -1) {
     room.sendAnnouncement(`Unable to load plugin from URL or repositories`,
@@ -132,10 +146,53 @@ async function onCommandPluginLoadHandler(player, arguments) {
   }
 }
 
-/**
- * TODO documentation
- */
-function onCommandPluginDisableHandler(player, [pluginName] = []) {
+const onCommandPluginReloadHandlerData = {
+  'sav/help': [
+    {
+      text: ` NAME, reload the given plugin safely`,
+      roles: [`host`],
+    },
+    {
+      text: ` NAME 1, reload the given plugin unsafely`,
+      roles: [`host`],
+    },
+  ],
+};
+
+async function onCommandPluginReloadHandler(player, [pluginName, unsafe] = []) {
+  const playerId = player.id;
+  const safe = !unsafe;
+
+  if (!roles.ensurePlayerRoles(playerId, `host`, room,
+      { feature: `plugin reload` })) {
+    return;
+  }
+
+  if (arguments.length === 0) {
+    return help.displayHelp(playerId, `plugin reload`);
+  }
+
+  try {
+    if (await HHM.manager.reloadPlugin(pluginName, safe)) {
+      room.sendAnnouncement(`Plugin ${pluginName} successfully reloaded`,
+          playerId);
+    } else {
+      room.sendAnnouncement(`Failed to reload plugin ${pluginName}, check `
+        + `console output`, playerId);
+    }
+  } catch (e) {
+    room.sendAnnouncement(`Error during plugin reload: ${e.message}`, playerId);
+  }
+}
+
+const onCommandPluginDisable1HandlerData = {
+  'sav/help': {
+      text: ` NAME`,
+      roles: [`host`],
+    },
+};
+
+function onCommandPluginDisable1Handler(player, [pluginName] = []) {
   const playerId = player.id;
 
   if (!roles.ensurePlayerRoles(playerId, `host`, room,
@@ -154,7 +211,7 @@ function onCommandPluginDisableHandler(player, [pluginName] = []) {
         { prefix: HHM.log.level.ERROR });
   }
 
-  if (!manager.disablePluginById(manager.getPluginId(pluginName))) {
+  if (!manager.disablePlugin(pluginName)) {
     // TODO more error information
     return room.sendAnnouncement(`Could not disable plugin ${pluginName}`, playerId,
         { prefix: HHM.log.level.ERROR });
@@ -163,10 +220,14 @@ function onCommandPluginDisableHandler(player, [pluginName] = []) {
   room.sendAnnouncement(`Plugin ${pluginName} disabled by player ${player.name}`);
 }
 
-/**
- * TODO documentation
- */
-function onCommandPluginEnableHandler(player, [pluginName] = []) {
+const onCommandPluginEnable1HandlerData = {
+  'sav/help': {
+    text: ` NAME`,
+    roles: [`host`],
+  },
+};
+
+function onCommandPluginEnable1Handler(player, [pluginName] = []) {
   const playerId = player.id;
 
   if (!roles.ensurePlayerRoles(playerId, `host`, room,
@@ -185,7 +246,7 @@ function onCommandPluginEnableHandler(player, [pluginName] = []) {
         { prefix: HHM.log.level.ERROR });
   }
 
-  if (!manager.enablePluginById(manager.getPluginId(pluginName))) {
+  if (!manager.enablePlugin(manager.getPluginId(pluginName))) {
     // TODO more error information
     return room.sendAnnouncement(`Could not enable plugin ${pluginName}`, playerId,
         { prefix: HHM.log.level.ERROR });
@@ -195,32 +256,43 @@ function onCommandPluginEnableHandler(player, [pluginName] = []) {
       room.getPlayer(playerId).name);
 }
 
-/**
- * TODO documentation
- */
 function onRoomLinkHandler() {
   roles = room.getPlugin(`sav/roles`);
   help = room.getPlugin(`sav/help`);
 
   if (!roles.hasRole(`host`)) {
     room.log(`The "host" role does not exist, some features of this plugin `
-        + `will be unavailable`);
+        + `will be unavailable`, HHM.log.level.WARN);
   }
-
-  help.registerHelp(`plugin list`,
-      ` [FILTER], list loaded, enabled, and disabled plugins.`)
-      .registerHelp(`plugin load`,
-      ` NAME URL, at least one of NAME or URL must be specified.`, { roles: [`host`] })
-      .registerHelp(`plugin disable`, ` NAME`, { roles: [`host`] })
-      .registerHelp(`plugin enable`, ` NAME`, { roles: [`host`] });
 }
 
 //
 // Exports
 //
 
-room.onCommand_plugin_list = onCommandPluginListHandler;
-room.onCommand_plugin_load = onCommandPluginLoadHandler;
-room.onCommand_plugin_disable = onCommandPluginDisableHandler;
-room.onCommand_plugin_enable = onCommandPluginEnableHandler;
+room.onCommand_plugin_list = {
+  functions: onCommandPluginListHandler,
+  data: onCommandPluginListHandlerData,
+};
+
+room.onCommand_plugin_load = {
+  functions: onCommandPluginLoadHandler,
+  data: onCommandPluginLoadHandlerData,
+};
+
+room.onCommand1_plugin_disable = {
+  functions: onCommandPluginDisable1Handler,
+  data: onCommandPluginDisable1HandlerData,
+};
+
+room.onCommand1_plugin_enable = {
+  functions: onCommandPluginEnable1Handler,
+  data: onCommandPluginEnable1HandlerData,
+};
+
+room.onCommand_plugin_reload = {
+  functions: onCommandPluginReloadHandler,
+  data: onCommandPluginReloadHandlerData,
+};
+
 room.onRoomLink = onRoomLinkHandler;

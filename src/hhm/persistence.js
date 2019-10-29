@@ -44,8 +44,9 @@ let interval, storage;
 async function persistAllPluginData() {
   room.triggerEvent(`onBeforePersist`);
 
+  // TODO does this wait for all persistence as expected?
   await room.getPluginManager().getEnabledPluginIds()
-      .map((id) => room.getPluginManager().getPluginById(id))
+      .map((id) => room.getPluginManager().getPlugin(id))
       .forEach(async (plugin) => await persistPluginData(plugin));
 }
 

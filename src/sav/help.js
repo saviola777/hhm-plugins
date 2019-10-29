@@ -1,20 +1,28 @@
 /**
  * Help plugin, provides basic help support for available commands.
  *
- * Provided helpers:
+ * To register help, use an object handler, supported properties are
  *
- * - `registerHelp`: Registers a help text for the given command, the command
- *  can be passed as 'cmd subcmd' or 'cmd_subcmd'. The help text will always
- *  start with 'Usage: !cmd subcmd', after that the given help text will be
- *  inserted.
+ * - text: the help text
+ * - roles: array of roles which are allowed to see the help for this command
  *
  * Example:
  *
- * room.getPlugin(`sav/help`).registerHelp(`auth`, ` ROLE PASSWORD.`);
+ * room.onCommand_auth = {
+ *   functions: () => { // handler code here
  *
- * Which will result in the output `Usage: !auth ROLE PASSWORD.` when typing
- * `!help auth`. You can specify an array of roles for which to display the
- * help as the third parameter.
+ *   },
+ *   metadata: {
+ *    'sav/help': {
+ *      text: ` ROLE PASSWORD`
+ *    }
+ *   }
+ * }
+ *
+ * Which will result in the output:
+ *
+ * [PM] Help:
+ * from sav/roles: !auth ROLE PASSWORD
  *
  * To display help programmatically, you can use
  *
@@ -23,6 +31,10 @@
  * for this example.
  *
  * Changelog:
+ *
+ * 2.0.0-git:
+ *  - support object handlers and pick up help text that way by default
+ *  - deprecate programmatic help specification
  *
  * 1.1.1:
  *  - switch to sendAnnouncement
@@ -43,43 +55,52 @@
  *  - initial version
  *
  *
- *  TODO Display help when calling command without parameters
- *  TODO Display sub-commands when calling help for main command without help
+ * TODO Display help when calling command without parameters
+ * TODO Display sub-commands when calling help for main command without help
+ *
  */
 var room = HBInit();
 
 room.pluginSpec = {
   name: `sav/help`,
   author: `saviola`,
-  version: `1.1.1`,
+  version: `2.0.0-git`,
   dependencies: [
-    `sav/commands`
+    `sav/commands`,
   ],
 };
 
-const commandHelpInfo = {};
+const commandHelpInfo = new Map();
 
 //
 // Plugin functions
 //
 
+function canPlayerUseCommand(playerId, handlerName, rolesPlugin) {
+  if (!commandHelpInfo.has(handlerName)) {
+    return true;
+  }
+
+  const helpInfos = Array.from(commandHelpInfo.get(handlerName).values())
+      .flat();
+
+  return helpInfos.some((helpInfo) => helpInfo.roles.length === 0
+      || helpInfo.roles.some((r) => rolesPlugin.hasPlayerRole(playerId, r)));
+}
+
 /**
  * TODO documentation
  */
 function createCommandList(playerId) {
-  const rolesPlugin = room.getPlugin(`sav/roles`) ||
-      { hasPlayerRole : () => true };
+  const rolesPlugin = getRolesPlugin();
 
-  return [...new Set(room.getPluginManager().getHandlerNames()
-      .filter((h) => h.startsWith(`onCommand`))
-      .filter((h) => {
-        return !h.startsWith(`onCommand_help_`) &&
-            (commandHelpInfo[h] === undefined
-            || commandHelpInfo[h].roles.length === 0
-            || commandHelpInfo[h].roles.some((r) =>
-                rolesPlugin.hasPlayerRole(playerId, r)))})
-      .map((h) => h.split(`_`).slice(1).join(` `) || ``)
-      .filter((h) => h.length > 0))
+  return [...new Set(room.getPluginManager()
+        .getHandlerNames()
+        .filter((h) => h.startsWith(`onCommand`))
+        .filter((h) => !h.startsWith(`onCommand_help_`) &&
+            canPlayerUseCommand(playerId, h, rolesPlugin))
+        .map((h) => h.split(`_`).slice(1).join(` `))
+        .filter((h) => h.length > 0)),
   ];
 }
 
@@ -87,12 +108,8 @@ function createCommandList(playerId) {
  * Programmatically display help for the given command and to the given player.
  */
 function displayHelp(playerId, command) {
-  command = prepareCommand(command);
-  const handlerName = `onCommand_help_${command}`;
 
-  if (room[handlerName] !== undefined) {
-    room[handlerName](playerId);
-  }
+  return onCommandHelpHandler(room.getPlayer(playerId), command.split(` `));
 }
 
 /**
@@ -109,7 +126,7 @@ function getPluginNamesForCommand(commandParts) {
   const manager = room.getPluginManager();
 
   const handlerNames = manager.getHandlerNames()
-      .filter(h => h.startsWith(`onCommand_`));
+      .filter(h => h.startsWith(`onCommand`));
 
   let commandHandlerNames = [];
   for (let i = commandParts.length; i > 0; i--) {
@@ -122,9 +139,51 @@ function getPluginNamesForCommand(commandParts) {
   }
 
   return manager.getEnabledPluginIds()
-      .filter(id => manager.getPluginById(id).getHandlerNames()
+      .filter(id => manager.getPlugin(id).getHandlerNames()
       .filter(h => commandHandlerNames.indexOf(h) !== -1).length > 0)
       .map(id => manager.getPluginName(id));
+}
+
+function getRolesPlugin() {
+  return room.getPlugin(`sav/roles`) || {hasPlayerRole: () => true};
+}
+
+function findHelpForCommand(commandParts = []) {
+  const manager = room.getPluginManager();
+
+  let handlerNames = [];
+
+  commandParts = commandParts.slice();
+  commandParts.push('');
+
+  do {
+    commandParts = commandParts.slice(0, -1);
+
+    const handlerNameRegExp = new RegExp('^onCommand(\\d+)?_'
+        + commandParts.join(`_`) + `_?(.*)?$`);
+
+    handlerNames = manager.getHandlerNames()
+        .map((h) => handlerNameRegExp.exec(h))
+        .filter((h) => h !== null && commandHelpInfo.has(h[0])
+            && Array.from(commandHelpInfo.get(h[0]).values())
+            .flat().length > 0);
+
+  } while (handlerNames.length === 0 && commandParts.length > 1);
+
+  return handlerNames;
+}
+
+function findSubCommandsForCommand(commandParts = [], playerId) {
+  const rolesPlugin = getRolesPlugin();
+
+  const handlerNameRegExp = new RegExp('^onCommand(\\d+)?_'
+      + commandParts.join(`_`) + `_(.*)$`);
+
+  return room.getPluginManager().getHandlerNames()
+      .map(h => handlerNameRegExp.exec(h))
+      .filter((h) => h !== null
+        && canPlayerUseCommand(playerId, h[0], rolesPlugin))
+      .map((h) => h[2].replace(`_`, ` `));
 }
 
 function prepareCommand(command) {
@@ -137,20 +196,31 @@ function prepareCommand(command) {
 
 /**
  * Helper function to register a help text for the given command.
+ *
+ * @deprecated Please use object handlers
  */
-function registerHelp(command, helpText, { numArgs = "", roles = [] } = {}) {
+function registerHelp(command, helpText,
+                      { numArgs = '', roles = [], pluginName } = {}) {
+
+  room.log(`registerHelp is deprecated, please use object handlers instead`);
   command = prepareCommand(command);
 
-  helpText = `Usage: ${getCommandPrefix()}`
-      + `${command.split(`_`).join(` `)}${helpText}`;
+  const handlerName = `onCommand${numArgs}_${command}`;
 
-  commandHelpInfo[`onCommand${numArgs}_${command}`] = {
-    helpText,
-    numArgs,
+  const pluginId = room.getPluginManager().getPluginId(pluginName);
+
+  if (!commandHelpInfo.has(handlerName)) {
+    commandHelpInfo.set(handlerName, new Map());
+  }
+
+  if (!commandHelpInfo.get(handlerName).has(pluginId)) {
+    commandHelpInfo.get(handlerName).set(pluginId, []);
+  }
+
+  commandHelpInfo.get(handlerName).get(pluginId).push({
+    text: helpText,
     roles,
-  };
-
-  room[`onCommand_help_${command}`] = (player) => room.sendAnnouncement(helpText, player.id);
+  });
 
   return room;
 }
@@ -163,33 +233,90 @@ function registerHelp(command, helpText, { numArgs = "", roles = [] } = {}) {
  * General help command, which lists all available commands.
  */
 function onCommandHelp0Handler(player) {
-  room.sendAnnouncement(`List of available commands, type ${getCommandPrefix()}help `
-    + `command to get help for a specific command:`, player.id);
-  room.sendAnnouncement(createCommandList(player.id).join(`, `), player.id);
+  room.sendAnnouncement(`List of available commands, type `
+      + `${getCommandPrefix()}help COMMAND to get help for a specific command:\n`
+      + createCommandList(player.id).join(`, `),
+      player.id);
 }
 
-/**
- * Catch-all help function which gets called if no specific help was registered
- * for a given help command.
- */
-function onCommandHelpHandler(player, arguments) {
-  if (arguments.length === 0) return;
+function onCommandHelpHandler(player, commandParts = []) {
+  if (commandParts.length === 0) return;
 
-  const manager = room.getPluginManager();
+  // regular expression output:
+  //  0 - full handler name
+  //  1 - numArgs
+  //  2 - sub-command
+  const handlerInfos = findHelpForCommand(commandParts);
 
-  const handlerNames = manager.getHandlerNames()
-      .filter(h => h.endsWith(arguments.join(`_`)));
+  const rolesPlugin = getRolesPlugin();
 
-  const pluginNames = getPluginNamesForCommand(arguments);
+  let helpText = ``;
+
+  // Collect commands (no sub-commands)
+  handlerInfos.filter((handlerInfo) => handlerInfo[2] === undefined)
+      .forEach((handlerInfo) => {
+
+    Array.from(commandHelpInfo.get(handlerInfo[0]).entries())
+        .forEach(([pluginId, helpInfos]) => {
+
+      if (helpInfos.length === 0) return;
+
+      helpInfos.forEach((helpInfo) => {
+        if (helpInfo.roles !== undefined && !helpInfo.roles.every(
+            (role) => rolesPlugin.hasPlayerRole(player.id, role))) {
+
+          return;
+        }
+
+        helpText += `${getCommandPrefix()}${commandParts.join(` `)}`
+            + helpInfo.text + `\n` + (pluginId >= 0 ?
+            `(${room.getPluginManager().getPluginName(pluginId)})` : ``);
+      });
+    });
+  });
+
+  // Sub-commands
+  let subCommands = findSubCommandsForCommand(commandParts, player.id)
+      .join(`, `);
+
+  if (helpText !== `` || subCommands !== ``) {
+    helpText = helpText !== `` ? `Help:\n${helpText}` : `No help available`;
+    subCommands = subCommands !== `` ? `\nSub-commands:\n${subCommands}` : ``;
+    return room.sendAnnouncement(`${helpText}${subCommands}`, player.id);
+  }
+
+  const pluginNames = getPluginNamesForCommand(commandParts);
 
   if (pluginNames.length === 0) {
-    room.sendAnnouncement(`No help available for the given topic, is the plugin loaded `
-        + `and enabled?`, player.id, HHM.log.ERROR);
+    room.sendAnnouncement(`No help available for the given command, is the `
+        + `plugin loaded and enabled?`, player.id);
     return;
   }
 
-  room.sendAnnouncement(`No help available for this command, it is handled by the `
-      + `following plugin(s): ${pluginNames.join(`, `)}`, player.id);
+  room.sendAnnouncement(`No help available for this command or you have no `
+      + `permission to execute it, it is handled by `
+      + `the following plugin(s):\n${pluginNames.join(`, `)}`, player.id);
+}
+
+function onHhmEventHandlerSetHandler({ handler }) {
+  if (!handler.meta.name.startsWith(`onCommand`)
+      || handler.data[`sav/help`] === undefined) return;
+
+  const helpData = (typeof handler.data[`sav/help`] !== `object`
+  || handler.data[`sav/help`].constructor !== Array
+      ? [handler.data[`sav/help`]] : handler.data[`sav/help`])
+      .map((h) => $.extend({roles: []}, h));
+
+  if (!commandHelpInfo.has(handler.meta.name)) {
+    commandHelpInfo.set(handler.meta.name, new Map());
+  }
+
+  if (!commandHelpInfo.get(handler.meta.name).has(handler.meta.plugin.getId())) {
+    commandHelpInfo.get(handler.meta.name).set(handler.meta.plugin.getId(), []);
+  }
+
+  commandHelpInfo.get(handler.meta.name).get(handler.meta.plugin.getId())
+      .push(...helpData);
 }
 
 //
@@ -201,3 +328,4 @@ room.registerHelp = registerHelp;
 
 room.onCommand0_help = onCommandHelp0Handler;
 room.onCommand_help = onCommandHelpHandler;
+room.onHhm_eventHandlerSet = onHhmEventHandlerSetHandler;

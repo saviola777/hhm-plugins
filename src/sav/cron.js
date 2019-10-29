@@ -135,7 +135,7 @@ function createOneTimeCronJob(handlerName, unit, pluginId) {
 
   const numSeconds = time * units[unit];
 
-  const plugin = room.getPluginManager().getPluginById(pluginId);
+  const plugin = room.getPluginManager().getPlugin(pluginId);
   const propertyName = handlerName + `Once`;
 
   const fn = plugin[propertyName];
@@ -143,7 +143,7 @@ function createOneTimeCronJob(handlerName, unit, pluginId) {
 
   setTimeout(() => {
     // Either execute or re-queue function
-    if (room.getPluginManager().getPluginById(pluginId).isEnabled()) {
+    if (room.getPluginManager().getPlugin(pluginId).isEnabled()) {
       fn();
     } else {
       plugin[propertyName] = fn;
@@ -182,7 +182,7 @@ function setupCronJobs() {
 
   // Handle one time cron jobs
   for (let plugin of room.getPluginManager().getEnabledPluginIds()
-      .map(id => room.getPluginManager().getPluginById(id))) {
+      .map(id => room.getPluginManager().getPlugin(id))) {
 
     handlerNames = plugin.getHandlerNames()
         .filter(h => h.startsWith(`onCron`) && h.endsWith(`Once`))
