@@ -423,6 +423,7 @@ function onCommandAuthHandler(player, arguments, argumentString, message) {
 
   if (roles.hasOwnProperty(role) && roles[role] === password
       && roles[role] !== ``) {
+    debugger;
     room.addPlayerRole(playerId, role, room.getConfig().persistentRoles);
     if (room.getConfig().printAuthEventsToRoom) {
       room.sendAnnouncement(`${player.name} authenticated for role ${role}`);
@@ -443,12 +444,10 @@ function onCommandAuthHandler(player, arguments, argumentString, message) {
   return false;
 }
 
-/**
- * TODO documentation
- */
 function onRoomLinkHandler() {
   if (typeof room.getConfig(`roles`) !== `object`) {
-    room.log(`Invalid configuration: roles must be object`, HHM.log.level.ERROR);
+    room.log(`Invalid configuration: roles must be object`,
+        HHM.log.level.ERROR);
     room.setConfig(`roles`, {});
   }
 
@@ -477,8 +476,8 @@ function onPlayerJoinHandler(player) {
 /**
  * TODO documentation
  */
-function onPlayerRoleAdminHandler(playerId, added) {
-  room.setPlayerAdmin(playerId, added);
+function onPlayerRoleAdminHandler(player, added) {
+  room.setPlayerAdmin(player.id, added);
 }
 
 //
