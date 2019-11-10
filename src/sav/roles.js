@@ -112,7 +112,7 @@ let getPlayerData, getUserData;
 
 /**
  * Adds the given role with the given password, or updates the password for the
- * given role if it aleady existed.
+ * given role if it already existed.
  */
 function addOrUpdateRole(role, password) {
   if (password === undefined) {
@@ -423,7 +423,6 @@ function onCommandAuthHandler(player, arguments, argumentString, message) {
 
   if (roles.hasOwnProperty(role) && roles[role] === password
       && roles[role] !== ``) {
-    debugger;
     room.addPlayerRole(playerId, role, room.getConfig().persistentRoles);
     if (room.getConfig().printAuthEventsToRoom) {
       room.sendAnnouncement(`${player.name} authenticated for role ${role}`);

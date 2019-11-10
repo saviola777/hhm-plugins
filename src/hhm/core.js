@@ -133,34 +133,34 @@ function onRoomLinkHandler(roomLink) {
   });
 
   room
-  // Event state validators
-  .addEventStateValidator(`onGameStart`, () => {
+  // Pre-event handler hooks
+  .addPreEventHandlerHook(`onGameStart`, () => {
     return properties.started === true;
   })
-  .addEventStateValidator(`onGameStop`, () => {
+  .addPreEventHandlerHook(`onGameStop`, () => {
     return properties.started === false;
   })
-  .addEventStateValidator(`onGamePause`, () => {
+  .addPreEventHandlerHook(`onGamePause`, () => {
     return properties.paused === true;
   })
-  .addEventStateValidator(`onGameUnpause`, () => {
+  .addPreEventHandlerHook(`onGameUnpause`, () => {
     return properties.paused === false;
   })
   // Prevent native onRoomLink events from propagating
-  .addEventStateValidator(`onRoomLink`, () => {
+  .addPreEventHook(`onRoomLink`, () => {
     return false;
   })
   // Pre and post event handler hooks
-  .addPreEventHandlerHook(`onGamePause`, () => {
+  .addPreEventHook(`onGamePause`, () => {
     properties.paused = true;
   })
-  .addPreEventHandlerHook(`onGameUnpause`, () => {
+  .addPreEventHook(`onGameUnpause`, () => {
     properties.paused = false;
   })
-  .addPreEventHandlerHook(`onGameStart`, () => {
+  .addPreEventHook(`onGameStart`, () => {
     properties.started = true;
   })
-  .addPreEventHandlerHook(`onGameStop`, () => {
+  .addPreEventHook(`onGameStop`, () => {
     properties.started = false;
   });
 

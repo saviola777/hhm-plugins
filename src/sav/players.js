@@ -411,15 +411,15 @@ function onPersistHandler() {
   }
 }
 
-function onPlayerJoinEventStateValidator({}, player) {
+function onPlayerJoinPreEventHandlerHook({}, player) {
   return hasPlayer(player.id) && isPlayerOnline(player.id);
 }
 
-function onPlayerLeaveEventStateValidator({}, player) {
+function onPlayerLeavePreEventHandlerHook({}, player) {
   return hasPlayer(player.id);
 }
 
-function onPlayerJoinPreEventHandlerHook({}, player) {
+function onPlayerJoinPreEventHook({}, player) {
 
   if (player.auth === null) {
     room.kickPlayer(player.id,
@@ -462,7 +462,7 @@ function onPlayerJoinPreEventHandlerHook({}, player) {
 /**
  * TODO documentation
  */
-function onPlayerLeavePreEventHandlerHook({}, player) {
+function onPlayerLeavePreEventHook({}, player) {
   if (player === null) {
     room.log(`Player object is null in onPlayerLeaveHandler, this should `
         + `not have happened`, HHM.log.level.WARN);
@@ -476,14 +476,14 @@ function onPlayerLeavePreEventHandlerHook({}, player) {
   playerData.online = false;
 }
 
-function onPlayerAdminChangePreEventHandlerHook({}, player) {
+function onPlayerAdminChangePreEventHook({}, player) {
   getPlayerById(player.id, {}).admin = player.admin;
 }
 
 /**
  * TODO documentation
  */
-function onPlayerTeamChangePreEventHandlerHook({}, player) {
+function onPlayerTeamChangePreEventHook({}, player) {
   getPlayerById(player.id, {}).team = player.team;
 }
 
@@ -512,32 +512,32 @@ function onRoomLinkHandler() {
   room.extend(`setPlayerAdmin`, setPlayerAdmin);
   room.extend(`setPlayerTeam`, setPlayerTeam);
 
-  room.addEventStateValidator(`onPlayerJoin`,
-      onPlayerJoinEventStateValidator);
-  room.addEventStateValidator(`onPlayerLeave`,
-      onPlayerLeaveEventStateValidator);
-
-  room.addPreEventHandlerHook(`onPlayerAdminChange`,
-      onPlayerAdminChangePreEventHandlerHook);
   room.addPreEventHandlerHook(`onPlayerJoin`,
       onPlayerJoinPreEventHandlerHook);
   room.addPreEventHandlerHook(`onPlayerLeave`,
       onPlayerLeavePreEventHandlerHook);
-  room.addPreEventHandlerHook(`onPlayerTeamChange`,
-      onPlayerTeamChangePreEventHandlerHook);
+
+  room.addPreEventHook(`onPlayerAdminChange`,
+      onPlayerAdminChangePreEventHook);
+  room.addPreEventHook(`onPlayerJoin`,
+      onPlayerJoinPreEventHook);
+  room.addPreEventHook(`onPlayerLeave`,
+      onPlayerLeavePreEventHook);
+  room.addPreEventHook(`onPlayerTeamChange`,
+      onPlayerTeamChangePreEventHook);
 
   // Inject our player objects
-  room.addPreEventHandlerHook(
+  room.addPreEventHook(
       [`onPlayerJoin`,`onPlayerLeave`,`onPlayerChat`, `onPlayerBallKick`,
         `onGameStart`, `onGameStop`, `onGamePause`, `onGameUnpause`,
         `onPlayerActivity`],
-      createPlayerInjectionPreEventHandlerHook());
-  room.addPreEventHandlerHook([`onPlayerAdminChange`, `onPlayerTeamChange`],
-      createPlayerInjectionPreEventHandlerHook(0, 1));
-  room.addPreEventHandlerHook(`onStadiumChange`,
-      createPlayerInjectionPreEventHandlerHook(1));
-  room.addPreEventHandlerHook(`onPlayerKicked`,
-      createPlayerInjectionPreEventHandlerHook(0, 3));
+      createPlayerInjectionPreEventHandlerHook(), `injectPlayer`);
+  room.addPreEventHook([`onPlayerAdminChange`, `onPlayerTeamChange`],
+      createPlayerInjectionPreEventHandlerHook(0, 1), `injectPlayer`);
+  room.addPreEventHook(`onStadiumChange`,
+      createPlayerInjectionPreEventHandlerHook(1), `injectPlayer`);
+  room.addPreEventHook(`onPlayerKicked`,
+      createPlayerInjectionPreEventHandlerHook(0, 3), `injectPlayer`);
 
   // Create authentication data entry for host
   // TODO solve cleaner
