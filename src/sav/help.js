@@ -9,7 +9,7 @@
  * Example:
  *
  * room.onCommand_auth = {
- *   functions: () => { // handler code here
+ *   function: () => { // handler code here
  *
  *   },
  *   metadata: {

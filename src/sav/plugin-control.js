@@ -271,27 +271,27 @@ function onRoomLinkHandler() {
 //
 
 room.onCommand_plugin_list = {
-  functions: onCommandPluginListHandler,
+  function: onCommandPluginListHandler,
   data: onCommandPluginListHandlerData,
 };
 
 room.onCommand_plugin_load = {
-  functions: onCommandPluginLoadHandler,
+  function: onCommandPluginLoadHandler,
   data: onCommandPluginLoadHandlerData,
 };
 
 room.onCommand1_plugin_disable = {
-  functions: onCommandPluginDisable1Handler,
+  function: onCommandPluginDisable1Handler,
   data: onCommandPluginDisable1HandlerData,
 };
 
 room.onCommand1_plugin_enable = {
-  functions: onCommandPluginEnable1Handler,
+  function: onCommandPluginEnable1Handler,
   data: onCommandPluginEnable1HandlerData,
 };
 
 room.onCommand_plugin_reload = {
-  functions: onCommandPluginReloadHandler,
+  function: onCommandPluginReloadHandler,
   data: onCommandPluginReloadHandlerData,
 };
 

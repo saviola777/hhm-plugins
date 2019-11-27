@@ -264,5 +264,5 @@ function onPlayerChatHandler(player, message, { returnValue }) {
 
 room.parseMessage = parseMessage;
 
-room.onCommand0_hhm = onCommandHhm0Handler;
+room.onCommand0_hhm = room.onCommand0_info = onCommandHhm0Handler;
 room.onPlayerChat = onPlayerChatHandler;
