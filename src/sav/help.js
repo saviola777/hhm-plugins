@@ -12,9 +12,10 @@
  *   function: () => { // handler code here
  *
  *   },
- *   metadata: {
+ *   data: {
  *    'sav/help': {
- *      text: ` ROLE PASSWORD`
+ *      text: ` ROLE PASSWORD`,
+ *      roles: ['user'] // just an example, only players with this role see help
  *    }
  *   }
  * }
@@ -32,9 +33,11 @@
  *
  * Changelog:
  *
- * 2.0.0-git:
+ * 2.0.0:
  *  - support object handlers and pick up help text that way by default
- *  - deprecate programmatic help specification
+ *  - fix problem with roles property where help was incorrectly hidden when
+ *    specifying several roles
+ *  - remove programmatic help specification
  *
  * 1.1.1:
  *  - switch to sendAnnouncement
@@ -64,7 +67,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/help`,
   author: `saviola`,
-  version: `2.0.0-git`,
+  version: `2.0.0`,
   dependencies: [
     `sav/commands`,
   ],
@@ -194,37 +197,6 @@ function prepareCommand(command) {
   return command;
 }
 
-/**
- * Helper function to register a help text for the given command.
- *
- * @deprecated Please use object handlers
- */
-function registerHelp(command, helpText,
-                      { numArgs = '', roles = [], pluginName } = {}) {
-
-  room.log(`registerHelp is deprecated, please use object handlers instead`);
-  command = prepareCommand(command);
-
-  const handlerName = `onCommand${numArgs}_${command}`;
-
-  const pluginId = room.getPluginManager().getPluginId(pluginName);
-
-  if (!commandHelpInfo.has(handlerName)) {
-    commandHelpInfo.set(handlerName, new Map());
-  }
-
-  if (!commandHelpInfo.get(handlerName).has(pluginId)) {
-    commandHelpInfo.get(handlerName).set(pluginId, []);
-  }
-
-  commandHelpInfo.get(handlerName).get(pluginId).push({
-    text: helpText,
-    roles,
-  });
-
-  return room;
-}
-
 //
 // Event handlers
 //
@@ -262,8 +234,9 @@ function onCommandHelpHandler(player, commandParts = []) {
       if (helpInfos.length === 0) return;
 
       helpInfos.forEach((helpInfo) => {
-        if (helpInfo.roles !== undefined && !helpInfo.roles.every(
-            (role) => rolesPlugin.hasPlayerRole(player.id, role))) {
+        if (helpInfo.roles !== undefined && helpInfo.roles.length > 0
+            && !helpInfo.roles.some((role) => rolesPlugin.hasPlayerRole(
+                player.id, role))) {
 
           return;
         }
