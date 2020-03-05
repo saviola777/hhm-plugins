@@ -18,6 +18,7 @@
     "sav/players",
     "sav/players-helper",
     "sav/plugin-control",
-    "sav/roles"
+    "sav/roles",
+    "sav/test",
   ]
 }

@@ -59,6 +59,14 @@ function onRestoreHandler(data) {
   Object.assign(conns, data.conns || {});
 }
 
+function onTestHandler(actor) {
+  const player = actor.addPlayer("test");
+  actor.removePlayer(player.id);
+  const player2 = actor.addPlayer("test2", player);
+  actor.assertEquals(null, room.getPlayer(player2.id),
+      "Player test2 should have been kicked");
+}
+
 //
 // Exports
 //
@@ -66,3 +74,9 @@ function onRestoreHandler(data) {
 room.onPlayerJoin = onPlayerJoinHandler;
 room.onPersist = onPersistHandler;
 room.onRestore = onRestoreHandler;
+room.onTest = {
+  function: onTestHandler,
+  data: {
+    'sav/test': { name: `joinWithDifferentName`},
+  },
+};

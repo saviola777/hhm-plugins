@@ -27,8 +27,24 @@ function onHhmEventHandler(args) {
   console.log(args);
 }
 
+const onCommandDebugData = {
+  'sav/help': {
+    text: `, just a test function`,
+    roles: ['admin', 'host', 'debugger'],
+  }
+};
+
+function onCommandDebugHandler() {
+  room.sendAnnouncement(`Debug plugin is loaded`);
+}
+
 //
 // Exports
 //
+
+room.onCommand_debug = {
+  data: onCommandDebugData,
+  function: onCommandDebugHandler,
+}
 
 room.onHhm = onHhmEventHandler;
