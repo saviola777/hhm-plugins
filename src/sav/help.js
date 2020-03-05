@@ -143,7 +143,7 @@ function getPluginNamesForCommand(commandParts) {
 
   return manager.getEnabledPluginIds()
       .filter(id => manager.getPlugin(id).getHandlerNames()
-      .filter(h => commandHandlerNames.indexOf(h) !== -1).length > 0)
+      .filter(h => commandHandlerNames.includes(h)).length > 0)
       .map(id => manager.getPluginName(id));
 }
 
@@ -297,7 +297,10 @@ function onHhmEventHandlerSetHandler({ handler }) {
 //
 
 room.displayHelp = displayHelp;
-room.registerHelp = registerHelp;
+room.registerHelp = () => {
+  room.log(`registerHelp has been removed, please use object handlers`,
+    HHM.log.level.WARN);
+}
 
 room.onCommand0_help = onCommandHelp0Handler;
 room.onCommand_help = onCommandHelpHandler;

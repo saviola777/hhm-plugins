@@ -87,7 +87,7 @@ function onCommandPluginListHandler(player, [filter = ``] = []) {
   let disabledPluginNames = [];
 
   loadedPluginIds = loadedPluginIds.map((id) => manager.getPlugin(id))
-      .filter((plugin) => plugin.getName().indexOf(filter) !== -1);
+      .filter((plugin) => plugin.getName().includes(filter));
   loadedPluginIds.forEach((plugin => {
         (plugin.isEnabled() ? enabledPluginNames : disabledPluginNames)
             .push(plugin.getName());

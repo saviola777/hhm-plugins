@@ -110,10 +110,16 @@ async function onHhmPluginDisabledHandler({ plugin }) {
 // Exports
 //
 
-room.persistPluginData = persistPluginDataWrapper;
-room.persistAllPluginData = persistAllPluginData;
+if (typeof Storage !== `undefined`) {
+  room.persistPluginData = persistPluginDataWrapper;
+  room.persistAllPluginData = persistAllPluginData;
 
-room.onRoomLink = onRoomLinkHandler;
+  room.onRoomLink = onRoomLinkHandler;
 
-room.onHhm_beforePluginLoaded = onHhmBeforePluginLoadedHandler;
-room.onHhm_pluginDisabled = onHhmPluginDisabledHandler;
+  room.onHhm_beforePluginLoaded = onHhmBeforePluginLoadedHandler;
+  room.onHhm_pluginDisabled = onHhmPluginDisabledHandler;
+} else {
+  room.onRoomLink = () => {
+    room.log(`Persistence disabled because browser does not support storage`);
+  }
+}

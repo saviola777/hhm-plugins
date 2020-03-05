@@ -48,6 +48,9 @@
  *
  * Changelog:
  *
+ * 1.3.1:
+ *  - adjust to sav/help 2.0 API
+ *
  * 1.3.0:
  *  - support both IDs and auths for most functions
  *  - add onUserRole events
@@ -83,7 +86,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/roles`,
   author: `saviola`,
-  version: `1.3.0`,
+  version: `1.3.1`,
   dependencies: [
     `sav/commands`,
     `sav/help`,
@@ -404,6 +407,12 @@ function triggerAuthenticationEvents(playerId, auth, role, userRole = false,
 // Event handlers
 //
 
+const onCommandAuthData = {
+  'sav/chat': {
+    text: ` ROLE PASSWORD`,
+  }
+}
+
 /**
  * TODO documentation
  */
@@ -454,8 +463,6 @@ function onRoomLinkHandler() {
       .buildPlayerPluginDataGetter(`sav/roles`);
   getUserData = room.getPlugin(`sav/players`)
       .buildUserPluginDataGetter(`sav/roles`);
-
-  room.getPlugin(`sav/help`).registerHelp(`auth`, ` ROLE PASSWORD`);
 }
 
 /**
@@ -475,8 +482,8 @@ function onPlayerJoinHandler(player) {
 /**
  * TODO documentation
  */
-function onPlayerRoleAdminHandler(player, added) {
-  room.setPlayerAdmin(player.id, added);
+function onPlayerRoleAddedAdminHandler(player) {
+  room.setPlayerAdmin(player.id, true);
 }
 
 //
@@ -496,6 +503,10 @@ room.removeRole = removeRole;
 room.setPlayerRole = setPlayerRole;
 
 room.onRoomLink = onRoomLinkHandler;
-room.onPlayerRole_admin = room.onPlayerRole_host = onPlayerRoleAdminHandler;
-room.onCommand_auth = onCommandAuthHandler;
+room.onPlayerRoleAdded_admin = room.onPlayerRoleAdded_host
+    = onPlayerRoleAddedAdminHandler;
+room.onCommand_auth = {
+  data: onCommandAuthData,
+  function: onCommandAuthHandler,
+};
 room.onPlayerJoin = onPlayerJoinHandler;

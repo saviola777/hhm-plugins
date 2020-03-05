@@ -161,9 +161,8 @@ function setupCronJobs() {
 
   for (let handlerName of handlerNames) {
     // Skip existing cron jobs
-    if (realTimeCronJobs.indexOf(handlerName) !== -1
-        || Object.getOwnPropertyNames(gameTickCronJobs).indexOf(handlerName)
-        !== -1) {
+    if (realTimeCronJobs.includes(handlerName)
+        || Object.getOwnPropertyNames(gameTickCronJobs).includes(handlerName)) {
       continue;
     }
 
