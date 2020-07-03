@@ -13,6 +13,10 @@
  *
  * Changelog:
  *
+ * 0.9.5:
+ *  - convert channels to map
+ *  - make compatible with plugin reloading
+ *
  * 0.9.4:
  *  - use sendAnnouncement instead of sendChat
  *  - support prefix- and plugin-specific formatting settings for announcements
@@ -60,7 +64,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/chat`,
   author: `saviola`,
-  version: `0.9.4`,
+  version: `0.9.5`,
   dependencies: [
     `sav/commands`,
     `sav/players`
@@ -98,8 +102,7 @@ room.pluginSpec = {
 // Global variables
 //
 
-// TODO turn into map
-const channels = {};
+const channels = new Map();
 const channelTypes = { AUTO: `auto`, MANUAL: `manual`};
 const config = room.getConfig();
 const teamChannelNames = [`spec`, `red`, `blue`];
@@ -116,15 +119,15 @@ let sendAnnouncementNative, getChatInfo;
  * TODO documentation
  */
 function createChannel(channel, password) {
-  if (channels.hasOwnProperty(channel)) {
+  if (channels.has(channel)) {
     return false;
   }
 
-  channels[channel] = {
+  channels.set(channel, {
     password: password,
     players: new Set(),
     type: channelTypes.AUTO,
-  };
+  });
 
   return true;
 }
@@ -172,8 +175,8 @@ function initializeAutoChannels() {
  * TODO documentation
  */
 function isPlayerInChannel(playerId, channel) {
-  return channels.hasOwnProperty(channel)
-      && channels[channel].players.has(playerId);
+  return channels.has(channel)
+      && channels.get(channel).players.has(playerId);
 }
 
 /**
@@ -185,16 +188,16 @@ function isPlayerInChannel(playerId, channel) {
 function joinChannel(playerId, channel, password = ``) {
   const chatInfo = getChatInfo(playerId);
 
-  if (!channels.hasOwnProperty(channel)
-      || password !== channels[channel].password) {
+  if (!channels.has(channel)
+      || password !== channels.get(channel).password) {
     return -1;
   }
 
-  if (channels[channel].players.has(playerId)) {
+  if (channels.get(channel).players.has(playerId)) {
     return 0;
   }
 
-  channels[channel].players.add(playerId);
+  channels.get(channel).players.add(playerId);
 
   if (chatInfo.channels.current === ``) {
     updateCurrentChannel(playerId, channel);
@@ -210,12 +213,12 @@ function joinChannel(playerId, channel, password = ``) {
  * TODO documentation
  */
 function leaveChannel(playerId, channel) {
-  if (!channels.hasOwnProperty(channel)
-      || !channels[channel].players.has(playerId)) {
+  if (!channels.has(channel)
+      || !channels.get(channel).players.has(playerId)) {
     return false;
   }
 
-  channels[channel].players.delete(playerId);
+  channels.get(channel).players.delete(playerId);
 
   room.sendAnnouncement(`Left channel &${channel}`, playerId);
 
@@ -253,7 +256,7 @@ function sendChannel(channel, message, prefix = [`HHM`], format = {}) {
   }
 
   room.getPlayerList().forEach((p) => {
-    if (!config.enableChannels || (channels[channel].players.has(p.id)
+    if (!config.enableChannels || (channels.get(channel).players.has(p.id)
         && !getChatInfo(p.id).channels.muted.has(channel))) {
       sendAnnouncementRaw(message, p.id, format, prefix);
     }
@@ -458,14 +461,16 @@ function onCommandChatChannelSwitch(player, [channel]) {
   return false;
 }
 
+function onEnableHandler() {
+  getChatInfo = room.getPlugin(`sav/players`)
+    .buildPlayerPluginDataGetter(`sav/chat`);
+}
+
 /**
  * TODO documentation
  */
 function onRoomLinkHandler() {
-  //sendChatNative = room.getParentRoom().sendChat;
   sendAnnouncementNative = room.getParentRoom().sendAnnouncement;
-  getChatInfo = room.getPlugin(`sav/players`)
-      .buildPlayerPluginDataGetter(`sav/chat`);
 
   room.extend(`sendAnnouncement`, sendAnnouncement);
 

@@ -37,6 +37,9 @@
  *
  * Changelog:
  *
+ * 1.2.1:
+ *  - Cronjobs for removed plugins are no longer re-queued infinitely
+ *
  * 1.2.0:
  *  - fix issue where new cron jobs would not be picked up at runtime until a
  *    property was set
@@ -64,7 +67,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/cron`,
   author: `saviola`,
-  version: `1.2.0`,
+  version: `1.2.1`,
   config: {
     gameTicks: 60,
   }
@@ -142,8 +145,11 @@ function createOneTimeCronJob(handlerName, unit, pluginId) {
   delete plugin[propertyName];
 
   setTimeout(() => {
-    // Either execute or re-queue function
-    if (room.getPluginManager().getPlugin(pluginId).isEnabled()) {
+    // Skip, execute, or re-queue function
+    if (!room.hasPlugin(pluginId)) {
+      return;
+    }
+    else if (room.getPlugin(pluginId).isEnabled()) {
       fn();
     } else {
       plugin[propertyName] = fn;

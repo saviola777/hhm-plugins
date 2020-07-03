@@ -33,6 +33,11 @@
  *
  * Changelog:
  *
+ * 2.0.1:
+ *  - defer to other plugins when it comes to the !help plugin, so !help is
+ *    only handled by this plugin if no other handler is registered for it
+ *  - no longer show help for disabled plugins
+ *
  * 2.0.0:
  *  - support object handlers and pick up help text that way by default
  *  - fix problem with roles property where help was incorrectly hidden when
@@ -67,7 +72,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/help`,
   author: `saviola`,
-  version: `2.0.0`,
+  version: `2.0.1`,
   dependencies: [
     `sav/commands`,
   ],
@@ -212,7 +217,7 @@ function onCommandHelp0Handler(player) {
 }
 
 function onCommandHelpHandler(player, commandParts = []) {
-  if (commandParts.length === 0) return;
+  if (commandParts.length === 0) return onCommandHelp0Handler(player);
 
   // regular expression output:
   //  0 - full handler name
@@ -231,7 +236,9 @@ function onCommandHelpHandler(player, commandParts = []) {
     Array.from(commandHelpInfo.get(handlerInfo[0]).entries())
         .forEach(([pluginId, helpInfos]) => {
 
-      if (helpInfos.length === 0) return;
+      if (helpInfos.length === 0 || !room.getPlugin(pluginId).isEnabled()) {
+        return;
+      }
 
       helpInfos.forEach((helpInfo) => {
         if (helpInfo.roles !== undefined && helpInfo.roles.length > 0
@@ -302,6 +309,5 @@ room.registerHelp = () => {
     HHM.log.level.WARN);
 }
 
-room.onCommand0_help = onCommandHelp0Handler;
 room.onCommand_help = onCommandHelpHandler;
 room.onHhm_eventHandlerSet = onHhmEventHandlerSetHandler;

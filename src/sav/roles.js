@@ -48,6 +48,9 @@
  *
  * Changelog:
  *
+ * 1.3.2:
+ *  - make compatible with plugin reloading
+ *
  * 1.3.1:
  *  - adjust to sav/help 2.0 API
  *
@@ -86,7 +89,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/roles`,
   author: `saviola`,
-  version: `1.3.1`,
+  version: `1.3.2`,
   dependencies: [
     `sav/commands`,
     `sav/help`,
@@ -452,7 +455,7 @@ function onCommandAuthHandler(player, arguments, argumentString, message) {
   return false;
 }
 
-function onRoomLinkHandler() {
+function onEnableHandler() {
   if (typeof room.getConfig(`roles`) !== `object`) {
     room.log(`Invalid configuration: roles must be object`,
         HHM.log.level.ERROR);
@@ -460,9 +463,9 @@ function onRoomLinkHandler() {
   }
 
   getPlayerData = room.getPlugin(`sav/players`)
-      .buildPlayerPluginDataGetter(`sav/roles`);
+    .buildPlayerPluginDataGetter(`sav/roles`);
   getUserData = room.getPlugin(`sav/players`)
-      .buildUserPluginDataGetter(`sav/roles`);
+    .buildUserPluginDataGetter(`sav/roles`);
 }
 
 /**
@@ -502,7 +505,8 @@ room.removePlayerRole = removePlayerRole;
 room.removeRole = removeRole;
 room.setPlayerRole = setPlayerRole;
 
-room.onRoomLink = onRoomLinkHandler;
+room.onEnable = onEnableHandler;
+room.onRoomLink = onEnableHandler;
 room.onPlayerRoleAdded_admin = room.onPlayerRoleAdded_host
     = onPlayerRoleAddedAdminHandler;
 room.onCommand_auth = {
