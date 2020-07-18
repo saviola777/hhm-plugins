@@ -33,6 +33,9 @@
  *
  * Changelog:
  *
+ * 1.4.1:
+ *  - fix several problems when accessing maps like arrays
+ *
  * 1.4.0:
  *  - convert objects to maps
  *  - make compatible with plugin reloading by kicking players out of the room when the plugin
@@ -99,7 +102,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/players`,
   author: `saviola`,
-  version: `1.4.0`,
+  version: `1.4.1`,
   config: {
     ghostKick: true,
   }
@@ -241,8 +244,8 @@ function findMostRecentPlayerByAuth(auth, { offlinePlayers = true }) {
  *
  * TODO is it okay to copy it?
  */
-function getUserAuths({ offlineUsers = true }) {
-  return userDataByAuth.keys()
+function getUserAuths({ offlineUsers = true } = {}) {
+  return Array.from(userDataByAuth.keys())
     .filter((auth) => offlineUsers || isUserOnline(auth));
 }
 
@@ -286,7 +289,7 @@ function getPlayerById(playerId, defaultValue = undefined) {
  * TODO documentation
  */
 function getPlayersByAuth(auth, { offlinePlayers = false } = {}) {
-  return playersById.values().filter((p) => p.auth === auth)
+  return Array.from(playersById.values()).filter((p) => p.auth === auth)
       .map((p) => room.getPlayer(p.id, { offlinePlayers }));
 }
 
@@ -351,7 +354,7 @@ function getPlayerList({ previousFunction }, { offlinePlayers = false } = {}) {
   const playersNative = previousFunction();
 
   return offlinePlayers ?
-      idToAuth.forEach((_, id) =>
+      Array.from(idToAuth.keys()).map((id) =>
           room.getPlayer(id, { offlinePlayers: true }))
       : playersNative.map((p) => room.getPlayer(p.id))
         .filter((p) => p !== null);

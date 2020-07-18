@@ -48,6 +48,9 @@
  *
  * Changelog:
  *
+ * 1.3.3:
+ *  - add convenience function clearPlayerRoles() to clear all player roles
+ *
  * 1.3.2:
  *  - make compatible with plugin reloading
  *
@@ -89,7 +92,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/roles`,
   author: `saviola`,
-  version: `1.3.2`,
+  version: `1.3.3`,
   dependencies: [
     `sav/commands`,
     `sav/help`,
@@ -128,9 +131,6 @@ function addOrUpdateRole(role, password) {
   room.getConfig().roles[role] = password;
 }
 
-/**
- * TODO documentation
- */
 function addRole(roles, role) {
   const changedRoles = !roles.has(role);
 
@@ -139,6 +139,16 @@ function addRole(roles, role) {
   }
 
   return changedRoles;
+}
+
+/**
+ * Clear all player roles.
+ */
+function clearPlayerRoles() {
+  getRoles({ offlinePlayers: true }).forEach((_, roleName) => {
+    room.getPlugin(`sav/players`).getUserAuths()
+      .forEach((auth) => removePlayerRole(auth, roleName));
+  });
 }
 
 /**
@@ -286,10 +296,10 @@ function getRole(roleName, { offlinePlayers = false } = {}) {
  * @see getRole
  */
 function getRoles({ offlinePlayers = false } = {}) {
-  let roles = {};
+  let roles = new Map();
 
   Object.getOwnPropertyNames(room.getConfig(`roles`)).forEach((roleName) =>
-      roles[roleName] = getRole(roleName, { offlinePlayers }));
+      roles.set(roleName, getRole(roleName, { offlinePlayers })));
 
   return roles;
 }
@@ -495,6 +505,7 @@ function onPlayerRoleAddedAdminHandler(player) {
 
 room.addPlayerRole = addPlayerRole;
 room.addOrUpdateRole = addOrUpdateRole;
+room.clearPlayerRoles = clearPlayerRoles;
 room.getPlayerRoles = getPlayerRoles;
 room.hasPlayerRole = hasPlayerRole;
 room.ensurePlayerRoles = ensurePlayerRoles;
