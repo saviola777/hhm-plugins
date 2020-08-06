@@ -3,6 +3,9 @@
  *
  * Changelog:
  *
+ * 1.2.0:
+ *  - export restoreMap function which adds object properties to a map
+ *
  * 1.1.0:
  *  - add onBeforePersist event to let plugins prepare for persistence
  *  - export persistAllPluginData
@@ -18,7 +21,7 @@ var room = HBInit();
 room.pluginSpec = {
   name: `hhm/persistence`,
   author: `saviola`,
-  version: `1.1.0`,
+  version: `1.2.0`,
   dependencies: [
     `hhm/persistence`, // Can't be disabled
   ],
@@ -106,6 +109,12 @@ async function onHhmPluginDisabledHandler({ plugin }) {
   return persistPluginData(plugin);
 }
 
+function restoreMap(sourceObject, targetMap = new Map()) {
+  for (const [key, value] of Object.entries(sourceObject)) {
+    targetMap.set(key, value);
+  }
+}
+
 //
 // Exports
 //
@@ -113,6 +122,7 @@ async function onHhmPluginDisabledHandler({ plugin }) {
 if (typeof Storage !== `undefined`) {
   room.persistPluginData = persistPluginDataWrapper;
   room.persistAllPluginData = persistAllPluginData;
+  room.restoreMap = restoreMap;
 
   room.onRoomLink = onRoomLinkHandler;
 

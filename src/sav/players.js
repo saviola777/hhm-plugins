@@ -33,6 +33,9 @@
  *
  * Changelog:
  *
+ * 1.4.2:
+ *  - use restoreMap function from hhm/persistence 1.2.0
+ *
  * 1.4.1:
  *  - fix several problems when accessing maps like arrays
  *
@@ -102,7 +105,10 @@ var room = HBInit();
 room.pluginSpec = {
   name: `sav/players`,
   author: `saviola`,
-  version: `1.4.1`,
+  version: `1.4.2`,
+  dependencies: [
+    `hhm/persistence`,
+  ],
   config: {
     ghostKick: true,
   }
@@ -494,14 +500,8 @@ function onRestoreHandler(data, pluginSpec) {
   if (data === undefined) return;
 
   // Restore user data
-  for (const [key, value] of Object.entries(data.usersByAuth)) {
-    userDataByAuth.set(key, value);
-  }
-
-  // Restore connection -> auth information
-  for (const [key, value] of Object.entries(data.playersByConn)) {
-    playersByConn.set(key, value);
-  }
+  room.getPlugin(`hhm/persistence`).restoreMap(data.usersByAuth, userDataByAuth);
+  room.getPlugin(`hhm/persistence`).restoreMap(data.playersByConn, playersByConn);
 
   // Remove all references to previous ID
   userDataByAuth.forEach((_, auth) => getUserData(auth).ids.clear());
